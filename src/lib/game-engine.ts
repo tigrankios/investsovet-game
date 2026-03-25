@@ -1,5 +1,6 @@
 import {
   GameState, Player, Position, LeaderboardEntry, RoundResult, Leverage, VoteState,
+  SlotState, SlotResult, SlotSymbol, SLOT_SYMBOLS, SLOT_TIMER_SEC,
   INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
@@ -27,6 +28,7 @@ export async function createGame(): Promise<GameState> {
     elapsed: 0,
     roundNumber: 1,
     voteState: null,
+    slotState: null,
   };
 }
 
@@ -250,6 +252,74 @@ export function getVoteResult(game: GameState): { yes: number; no: number; total
   return { yes, no, total, majority: yes > no };
 }
 
+// --- Слот-машина ---
+
+export function startSlots(game: GameState): SlotState {
+  game.phase = 'slots';
+  game.slotState = {
+    played: {},
+    timer: SLOT_TIMER_SEC,
+  };
+  return game.slotState;
+}
+
+function randomSymbol(): SlotSymbol {
+  return SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
+}
+
+function getSlotMultiplier(reels: [SlotSymbol, SlotSymbol, SlotSymbol]): number {
+  const [a, b, c] = reels;
+
+  // 3 одинаковых
+  if (a === b && b === c) {
+    if (a === '₿') return 10;  // джекпот
+    if (a === '💎') return 5;
+    return 3;
+  }
+
+  // 2 одинаковых
+  if (a === b || b === c || a === c) return 1.5;
+
+  // Ничего
+  return 0;
+}
+
+export function spinSlots(
+  game: GameState,
+  playerId: string,
+  bet: number,
+): { success: boolean; message: string; result?: SlotResult } {
+  const player = getPlayer(game, playerId);
+  if (!player) return { success: false, message: 'Игрок не найден' };
+  if (game.phase !== 'slots') return { success: false, message: 'Слоты не активны' };
+  if (!game.slotState) return { success: false, message: 'Слоты не активны' };
+  if (game.slotState.played[playerId]) return { success: false, message: 'Уже крутил!' };
+  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
+  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+
+  const reels: [SlotSymbol, SlotSymbol, SlotSymbol] = [randomSymbol(), randomSymbol(), randomSymbol()];
+  const multiplier = getSlotMultiplier(reels);
+
+  // winAmount: при multiplier=0 теряет ставку, иначе получает bet * multiplier - bet
+  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+
+  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  if (player.balance < 0) player.balance = 0;
+
+  const result: SlotResult = { reels, multiplier, bet, winAmount };
+  game.slotState.played[playerId] = result;
+
+  return { success: true, message: `${reels.join(' ')} — x${multiplier}`, result };
+}
+
+export function getSlotResults(game: GameState): { nickname: string; result: SlotResult }[] {
+  if (!game.slotState) return [];
+  return Object.entries(game.slotState.played).map(([playerId, result]) => {
+    const player = game.players.find((p) => p.id === playerId);
+    return { nickname: player?.nickname || '???', result };
+  });
+}
+
 export async function setupNextRound(game: GameState): Promise<void> {
   const rawTicker = getRandomTicker();
   const duration = MIN_ROUND_DURATION + Math.floor(Math.random() * (MAX_ROUND_DURATION - MIN_ROUND_DURATION + 1));
@@ -263,6 +333,7 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.elapsed = 0;
   game.roundNumber++;
   game.voteState = null;
+  game.slotState = null;
 
   // Сброс PnL (баланс сохраняется между раундами)
   for (const player of game.players) {

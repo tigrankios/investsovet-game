@@ -11,7 +11,7 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    voteData, liquidationAlert,
+    voteData, liquidationAlert, slotData,
     createRoom, startGame,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -47,7 +47,7 @@ export default function TVPage() {
 
   const { phase, roomCode, ticker, playerNames } = gameState;
   const joinUrl = typeof window !== 'undefined'
-    ? `http://${window.location.hostname}:${window.location.port}/play?room=${roomCode}`
+    ? `${window.location.origin}/play?room=${roomCode}`
     : '';
 
   // --- LOBBY ---
@@ -154,6 +154,42 @@ export default function TVPage() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // --- SLOTS ---
+  if (phase === 'slots') {
+    const timer = slotData?.timer || gameState.slotTimer;
+    const slotResults = slotData?.results || [];
+
+    return (
+      <div className="h-screen bg-black text-white flex flex-col items-center justify-center">
+        <h1 className="text-6xl font-black text-yellow-400 mb-2">СЛОТ-МАШИНА</h1>
+        <p className="text-gray-400 text-xl mb-8">Игроки крутят барабаны...</p>
+        <p className="text-yellow-400 text-4xl font-mono font-bold mb-8">{timer}с</p>
+
+        {slotResults.length > 0 && (
+          <div className="w-full max-w-2xl space-y-3">
+            {slotResults.map(({ nickname, result }) => (
+              <div key={nickname} className="flex items-center justify-between bg-gray-900/50 rounded-xl px-6 py-4">
+                <span className="text-xl font-bold">{nickname}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-3xl">{result.reels.join(' ')}</span>
+                  <span className={`text-xl font-mono font-bold ${result.winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {result.multiplier > 0 ? `x${result.multiplier}` : 'MISS'}
+                    {' '}
+                    {result.winAmount >= 0 ? '+' : ''}{result.winAmount.toFixed(0)}$
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {slotResults.length === 0 && (
+          <p className="text-gray-600 text-2xl animate-pulse">Ждём ставки...</p>
+        )}
       </div>
     );
   }
@@ -343,17 +379,19 @@ function CandlestickChart({ candles }: { candles: Candle[] }) {
 }
 
 function LeaderboardRow({ entry, rank }: { entry: LeaderboardEntry; rank: number }) {
+  const medals = ['🏆', '🥈', '🥉'];
+  const rankDisplay = rank <= 3 ? medals[rank - 1] : `${rank}`;
   const medalColors = ['text-yellow-400', 'text-gray-400', 'text-orange-400'];
   const rankColor = rank <= 3 ? medalColors[rank - 1] : 'text-gray-600';
 
   return (
-    <div className="flex items-center gap-5 bg-gray-900/50 rounded-xl px-6 py-4">
-      <span className={`font-bold text-3xl w-10 ${rankColor}`}>{rank}</span>
+    <div className="flex items-center gap-4 bg-gray-900/50 rounded-xl px-5 py-3">
+      <span className={`font-bold text-2xl w-10 text-center ${rankColor}`}>{rankDisplay}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-white font-semibold text-2xl truncate">{entry.nickname}</p>
+          <p className="text-white font-semibold text-xl truncate">{entry.nickname}</p>
           {entry.hasPosition && (
-            <span className={`text-base px-2 py-0.5 rounded font-bold ${entry.positionDirection === 'long' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+            <span className={`text-sm px-2 py-0.5 rounded font-bold ${entry.positionDirection === 'long' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
               {entry.positionDirection === 'long' ? 'LONG' : 'SHORT'}
               {entry.positionLeverage && entry.positionLeverage > 1 ? ` x${entry.positionLeverage}` : ''}
             </span>
@@ -361,7 +399,8 @@ function LeaderboardRow({ entry, rank }: { entry: LeaderboardEntry; rank: number
         </div>
       </div>
       <div className="text-right">
-        <p className={`font-mono font-bold text-2xl ${entry.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        <p className="font-mono font-bold text-xl text-white">${entry.balance.toFixed(0)}</p>
+        <p className={`font-mono text-sm ${entry.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {entry.totalPnl >= 0 ? '+' : ''}{entry.totalPnl.toFixed(0)}$
         </p>
       </div>

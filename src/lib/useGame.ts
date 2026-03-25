@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
-  RoundResult, Candle, Leverage,
+  RoundResult, Candle, Leverage, SlotResult,
 } from './types';
 
 export function useGame() {
@@ -19,6 +19,8 @@ export function useGame() {
   const [currentPrice, setCurrentPrice] = useState(0);
   const [voteData, setVoteData] = useState<{ yes: number; no: number; total: number; timer: number } | null>(null);
   const [liquidationAlert, setLiquidationAlert] = useState('');
+  const [slotResult, setSlotResult] = useState<SlotResult | null>(null);
+  const [slotData, setSlotData] = useState<{ timer: number; results: { nickname: string; result: SlotResult }[] } | null>(null);
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -56,6 +58,9 @@ export function useGame() {
 
     socket.on('voteUpdate', (data) => setVoteData(data));
 
+    socket.on('slotResult', (result) => setSlotResult(result));
+    socket.on('slotUpdate', (data) => setSlotData(data));
+
     socket.on('error', (msg) => {
       setError(msg);
       setTimeout(() => setError(''), 3000);
@@ -71,6 +76,8 @@ export function useGame() {
       socket.off('tradeResult');
       socket.off('liquidated');
       socket.off('voteUpdate');
+      socket.off('slotResult');
+      socket.off('slotUpdate');
       socket.off('error');
     };
   }, []);
@@ -94,6 +101,10 @@ export function useGame() {
 
   const closePosition = useCallback(() => getSocket().emit('closePosition'), []);
 
+  const spinSlots = useCallback((bet: number) => {
+    getSocket().emit('spinSlots', { bet });
+  }, []);
+
   const voteNextRound = useCallback((vote: boolean) => {
     getSocket().emit('voteNextRound', { vote });
   }, []);
@@ -101,6 +112,7 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    createRoom, joinRoom, startGame, openPosition, closePosition, voteNextRound,
+    slotResult, slotData,
+    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, voteNextRound,
   };
 }

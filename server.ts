@@ -26,8 +26,8 @@ app.prepare().then(() => {
 
   httpServer.listen(port, '0.0.0.0', () => {
     console.log(`> InvestSovet running on http://0.0.0.0:${port}`);
-    console.log(`> Local: http://localhost:${port}`);
-    console.log(`> Network: http://192.168.68.119:${port}`);
-    console.log(`> WebSocket on ws://0.0.0.0:${port}/api/socketio`);
+    if (dev) {
+      console.log(`> Local: http://localhost:${port}`);
+    }
   });
 });

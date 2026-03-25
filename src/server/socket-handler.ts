@@ -6,6 +6,7 @@ import {
   createGame, addPlayer, removePlayer, getPlayer,
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
+  startSlots, spinSlots, getSlotResults,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -31,6 +32,7 @@ function getClientGameState(game: GameState): ClientGameState {
     voteNo: voteResult.no,
     voteTotal: voteResult.total,
     voteTimer: game.voteState?.timer || 0,
+    slotTimer: game.slotState?.timer || 0,
   };
 }
 
@@ -118,14 +120,48 @@ function startTrading(io: SocketServer, game: GameState) {
             if (player.connected) sendPlayerUpdate(io, game, player.id);
           }
 
-          // Через 5 секунд — голосование
+          // Через 3 секунды — слот-машина
           setTimeout(() => {
-            startVotingPhase(io, game);
-          }, 5000);
+            startSlotsPhase(io, game);
+          }, 3000);
         }
       }, 1000);
 
       timers.set(game.roomCode, candleTimer);
+    }
+  }, 1000);
+}
+
+function startSlotsPhase(io: SocketServer, game: GameState) {
+  startSlots(game);
+  broadcastState(io, game);
+
+  io.to(game.roomCode).emit('slotUpdate', {
+    timer: game.slotState!.timer,
+    results: [],
+  });
+
+  const slotTimer = setInterval(() => {
+    if (!game.slotState) { clearInterval(slotTimer); return; }
+    game.slotState.timer--;
+
+    io.to(game.roomCode).emit('slotUpdate', {
+      timer: game.slotState.timer,
+      results: getSlotResults(game),
+    });
+
+    if (game.slotState.timer <= 0) {
+      clearInterval(slotTimer);
+      // Обновить балансы после слотов
+      for (const player of game.players) {
+        if (player.connected) sendPlayerUpdate(io, game, player.id);
+      }
+      broadcastLeaderboard(io, game);
+
+      // Через 2 секунды — голосование
+      setTimeout(() => {
+        startVotingPhase(io, game);
+      }, 2000);
     }
   }, 1000);
 }
@@ -262,6 +298,27 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       socket.emit('tradeResult', { success: result.success, message: result.message });
       sendPlayerUpdate(io, game, socket.id);
       broadcastLeaderboard(io, game);
+    });
+
+    socket.on('spinSlots', ({ bet }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'slots') return;
+
+      const result = spinSlots(game, socket.id, bet);
+      if (result.success && result.result) {
+        socket.emit('slotResult', result.result);
+        sendPlayerUpdate(io, game, socket.id);
+        broadcastLeaderboard(io, game);
+        // Обновить все результаты для TV
+        io.to(roomCode).emit('slotUpdate', {
+          timer: game.slotState?.timer || 0,
+          results: getSlotResults(game),
+        });
+      } else {
+        socket.emit('error', result.message);
+      }
     });
 
     socket.on('voteNextRound', ({ vote }) => {
