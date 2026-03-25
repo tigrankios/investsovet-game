@@ -1,0 +1,305 @@
+import { Server as SocketServer, Socket } from 'socket.io';
+import type {
+  ClientToServerEvents, ServerToClientEvents, GameState, ClientGameState,
+} from '../lib/types';
+import {
+  createGame, addPlayer, removePlayer, getPlayer,
+  tickCandle, openPosition, closePosition, getLeaderboard, endRound,
+  getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
+} from '../lib/game-engine';
+
+type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+
+const rooms = new Map<string, GameState>();
+const playerRooms = new Map<string, string>(); // socketId -> roomCode
+const playerNicknames = new Map<string, string>(); // socketId -> nickname (для reconnect)
+const timers = new Map<string, NodeJS.Timeout>();
+
+function getClientGameState(game: GameState): ClientGameState {
+  const voteResult = getVoteResult(game);
+  return {
+    roomCode: game.roomCode,
+    phase: game.phase,
+    playerCount: game.players.filter((p) => p.connected).length,
+    playerNames: game.players.filter((p) => p.connected).map((p) => p.nickname),
+    ticker: game.ticker,
+    visibleCandles: game.candles.slice(0, game.visibleCandleCount),
+    currentPrice: game.currentPrice,
+    elapsed: game.elapsed,
+    roundNumber: game.roundNumber,
+    voteYes: voteResult.yes,
+    voteNo: voteResult.no,
+    voteTotal: voteResult.total,
+    voteTimer: game.voteState?.timer || 0,
+  };
+}
+
+function broadcastState(io: SocketServer, game: GameState) {
+  io.to(game.roomCode).emit('gameState', getClientGameState(game));
+}
+
+function broadcastLeaderboard(io: SocketServer, game: GameState) {
+  io.to(game.roomCode).emit('leaderboard', getLeaderboard(game));
+}
+
+function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
+  const player = getPlayer(game, playerId);
+  if (!player) return;
+  io.to(playerId).emit('playerUpdate', {
+    balance: Math.round(player.balance * 100) / 100,
+    position: player.position,
+    pnl: Math.round(player.pnl * 100) / 100,
+    unrealizedPnl: Math.round(getUnrealizedPnl(player, game.currentPrice) * 100) / 100,
+  });
+}
+
+function clearTimer(roomCode: string) {
+  const timer = timers.get(roomCode);
+  if (timer) {
+    clearInterval(timer);
+    timers.delete(roomCode);
+  }
+}
+
+function startTrading(io: SocketServer, game: GameState) {
+  game.phase = 'countdown';
+  broadcastState(io, game);
+
+  let count = 3;
+  io.to(game.roomCode).emit('countdown', count);
+
+  const countdownTimer = setInterval(() => {
+    count--;
+    if (count > 0) {
+      io.to(game.roomCode).emit('countdown', count);
+    } else {
+      clearInterval(countdownTimer);
+
+      game.phase = 'trading';
+      game.visibleCandleCount = 1;
+      game.currentPrice = game.candles[0].close;
+      broadcastState(io, game);
+      broadcastLeaderboard(io, game);
+
+      const candleTimer = setInterval(() => {
+        const { continues, liquidated } = tickCandle(game);
+
+        const idx = game.visibleCandleCount - 1;
+        if (idx < game.candles.length) {
+          io.to(game.roomCode).emit('candleUpdate', {
+            candle: game.candles[idx],
+            price: game.currentPrice,
+            index: idx,
+          });
+        }
+
+        // Ликвидации
+        for (const liq of liquidated) {
+          io.to(game.roomCode).emit('liquidated', liq);
+        }
+
+        // Обновить PnL каждого игрока
+        for (const player of game.players) {
+          if (player.connected) sendPlayerUpdate(io, game, player.id);
+        }
+
+        if (game.elapsed % 2 === 0) broadcastLeaderboard(io, game);
+
+        if (!continues) {
+          clearInterval(candleTimer);
+          timers.delete(game.roomCode);
+
+          const result = endRound(game);
+          io.to(game.roomCode).emit('roundEnd', result);
+          broadcastLeaderboard(io, game);
+
+          // Обновить балансы после закрытия позиций
+          for (const player of game.players) {
+            if (player.connected) sendPlayerUpdate(io, game, player.id);
+          }
+
+          // Через 5 секунд — голосование
+          setTimeout(() => {
+            startVotingPhase(io, game);
+          }, 5000);
+        }
+      }, 1000);
+
+      timers.set(game.roomCode, candleTimer);
+    }
+  }, 1000);
+}
+
+function startVotingPhase(io: SocketServer, game: GameState) {
+  startVoting(game);
+  broadcastState(io, game);
+
+  const voteResult = getVoteResult(game);
+  io.to(game.roomCode).emit('voteUpdate', {
+    yes: voteResult.yes,
+    no: voteResult.no,
+    total: voteResult.total,
+    timer: game.voteState!.timer,
+  });
+
+  const voteTimer = setInterval(() => {
+    if (!game.voteState) { clearInterval(voteTimer); return; }
+    game.voteState.timer--;
+
+    const result = getVoteResult(game);
+    io.to(game.roomCode).emit('voteUpdate', {
+      yes: result.yes, no: result.no, total: result.total,
+      timer: game.voteState.timer,
+    });
+
+    if (game.voteState.timer <= 0) {
+      clearInterval(voteTimer);
+      resolveVote(io, game);
+    }
+  }, 1000);
+}
+
+async function resolveVote(io: SocketServer, game: GameState) {
+  const result = getVoteResult(game);
+  if (result.majority) {
+    // Большинство за — новый раунд
+    await setupNextRound(game);
+    broadcastState(io, game);
+    startTrading(io, game);
+  } else {
+    // Большинство против — игра окончена
+    game.phase = 'finished';
+    game.voteState = null;
+    broadcastState(io, game);
+    broadcastLeaderboard(io, game);
+  }
+}
+
+export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, ServerToClientEvents>) {
+  io.on('connection', (socket: GameSocket) => {
+    console.log(`[WS] Connected: ${socket.id}`);
+
+    socket.on('createRoom', async () => {
+      const game = await createGame();
+      rooms.set(game.roomCode, game);
+      socket.join(game.roomCode);
+      playerRooms.set(socket.id, game.roomCode);
+      console.log(`[WS] Room created: ${game.roomCode} (${game.ticker}, ${game.roundDuration}s, ${game.candles.length} candles)`);
+      broadcastState(io, game);
+    });
+
+    socket.on('joinRoom', ({ roomCode, nickname }) => {
+      const game = rooms.get(roomCode);
+      if (!game) {
+        socket.emit('error', 'Комната не найдена');
+        return;
+      }
+
+      // Reconnect — если игрок с таким ником уже есть
+      const existing = game.players.find((p) => p.nickname === nickname);
+      if (existing) {
+        // Обновить ID сокета
+        const oldId = existing.id;
+        existing.id = socket.id;
+        existing.connected = true;
+        playerRooms.delete(oldId);
+        playerRooms.set(socket.id, roomCode);
+        playerNicknames.set(socket.id, nickname);
+        socket.join(roomCode);
+        broadcastState(io, game);
+        sendPlayerUpdate(io, game, socket.id);
+        console.log(`[WS] ${nickname} reconnected to ${roomCode}`);
+        return;
+      }
+
+      if (game.phase !== 'lobby') {
+        socket.emit('error', 'Игра уже началась');
+        return;
+      }
+
+      const player = addPlayer(game, socket.id, nickname);
+      socket.join(roomCode);
+      playerRooms.set(socket.id, roomCode);
+      playerNicknames.set(socket.id, nickname);
+      io.to(roomCode).emit('playerJoined', { nickname: player.nickname });
+      broadcastState(io, game);
+      sendPlayerUpdate(io, game, socket.id);
+      console.log(`[WS] ${nickname} joined ${roomCode}`);
+    });
+
+    socket.on('startGame', () => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'lobby') return;
+      if (game.players.filter((p) => p.connected).length < 1) {
+        socket.emit('error', 'Нужен хотя бы 1 игрок');
+        return;
+      }
+      console.log(`[WS] Game starting in ${roomCode}`);
+      startTrading(io, game);
+    });
+
+    socket.on('openPosition', ({ direction, size, leverage }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game) return;
+
+      const result = openPosition(game, socket.id, direction, size, leverage);
+      socket.emit('tradeResult', result);
+      sendPlayerUpdate(io, game, socket.id);
+      broadcastLeaderboard(io, game);
+    });
+
+    socket.on('closePosition', () => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game) return;
+
+      const result = closePosition(game, socket.id);
+      socket.emit('tradeResult', { success: result.success, message: result.message });
+      sendPlayerUpdate(io, game, socket.id);
+      broadcastLeaderboard(io, game);
+    });
+
+    socket.on('voteNextRound', ({ vote }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'voting') return;
+
+      castVote(game, socket.id, vote);
+      const result = getVoteResult(game);
+      io.to(roomCode).emit('voteUpdate', {
+        yes: result.yes, no: result.no, total: result.total,
+        timer: game.voteState?.timer || 0,
+      });
+    });
+
+    socket.on('disconnect', () => {
+      const roomCode = playerRooms.get(socket.id);
+      if (roomCode) {
+        const game = rooms.get(roomCode);
+        if (game) {
+          removePlayer(game, socket.id);
+          const nick = playerNicknames.get(socket.id);
+          if (nick) io.to(roomCode).emit('playerLeft', nick);
+          broadcastState(io, game);
+
+          // Не удаляем комнату сразу — дадим шанс на реконнект
+          setTimeout(() => {
+            if (game.players.every((p) => !p.connected)) {
+              clearTimer(roomCode);
+              rooms.delete(roomCode);
+              console.log(`[WS] Room ${roomCode} deleted (empty)`);
+            }
+          }, 30000);
+        }
+        playerRooms.delete(socket.id);
+      }
+      console.log(`[WS] Disconnected: ${socket.id}`);
+    });
+  });
+}
