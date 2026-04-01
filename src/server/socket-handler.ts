@@ -6,7 +6,7 @@ import {
   createGame, addPlayer, removePlayer, getPlayer,
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
-  startSlots, spinSlots, getSlotResults,
+  startBonus, spinSlots, spinWheel, openLootbox, getBonusResults,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -32,7 +32,8 @@ function getClientGameState(game: GameState): ClientGameState {
     voteNo: voteResult.no,
     voteTotal: voteResult.total,
     voteTimer: game.voteState?.timer || 0,
-    slotTimer: game.slotState?.timer || 0,
+    bonusTimer: game.bonusState?.timer || 0,
+    bonusType: game.bonusState?.bonusType || null,
   };
 }
 
@@ -120,9 +121,9 @@ function startTrading(io: SocketServer, game: GameState) {
             if (player.connected) sendPlayerUpdate(io, game, player.id);
           }
 
-          // Через 3 секунды — слот-машина
+          // Через 3 секунды — бонусная мини-игра
           setTimeout(() => {
-            startSlotsPhase(io, game);
+            startBonusPhase(io, game);
           }, 3000);
         }
       }, 1000);
@@ -132,27 +133,29 @@ function startTrading(io: SocketServer, game: GameState) {
   }, 1000);
 }
 
-function startSlotsPhase(io: SocketServer, game: GameState) {
-  startSlots(game);
+function startBonusPhase(io: SocketServer, game: GameState) {
+  startBonus(game);
   broadcastState(io, game);
 
-  io.to(game.roomCode).emit('slotUpdate', {
-    timer: game.slotState!.timer,
+  io.to(game.roomCode).emit('bonusUpdate', {
+    timer: game.bonusState!.timer,
+    bonusType: game.bonusState!.bonusType,
     results: [],
   });
 
-  const slotTimer = setInterval(() => {
-    if (!game.slotState) { clearInterval(slotTimer); return; }
-    game.slotState.timer--;
+  const bonusTimer = setInterval(() => {
+    if (!game.bonusState) { clearInterval(bonusTimer); return; }
+    game.bonusState.timer--;
 
-    io.to(game.roomCode).emit('slotUpdate', {
-      timer: game.slotState.timer,
-      results: getSlotResults(game),
+    io.to(game.roomCode).emit('bonusUpdate', {
+      timer: game.bonusState.timer,
+      bonusType: game.bonusState.bonusType,
+      results: getBonusResults(game),
     });
 
-    if (game.slotState.timer <= 0) {
-      clearInterval(slotTimer);
-      // Обновить балансы после слотов
+    if (game.bonusState.timer <= 0) {
+      clearInterval(bonusTimer);
+      // Обновить балансы после бонуса
       for (const player of game.players) {
         if (player.connected) sendPlayerUpdate(io, game, player.id);
       }
@@ -304,17 +307,59 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
-      if (!game || game.phase !== 'slots') return;
+      if (!game || game.phase !== 'bonus') return;
 
       const result = spinSlots(game, socket.id, bet);
       if (result.success && result.result) {
-        socket.emit('slotResult', result.result);
+        socket.emit('bonusResult', result.result);
         sendPlayerUpdate(io, game, socket.id);
         broadcastLeaderboard(io, game);
-        // Обновить все результаты для TV
-        io.to(roomCode).emit('slotUpdate', {
-          timer: game.slotState?.timer || 0,
-          results: getSlotResults(game),
+        io.to(roomCode).emit('bonusUpdate', {
+          timer: game.bonusState?.timer || 0,
+          bonusType: game.bonusState?.bonusType || 'slots',
+          results: getBonusResults(game),
+        });
+      } else {
+        socket.emit('error', result.message);
+      }
+    });
+
+    socket.on('spinWheel', ({ bet }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'bonus') return;
+
+      const result = spinWheel(game, socket.id, bet);
+      if (result.success && result.result) {
+        socket.emit('bonusResult', result.result);
+        sendPlayerUpdate(io, game, socket.id);
+        broadcastLeaderboard(io, game);
+        io.to(roomCode).emit('bonusUpdate', {
+          timer: game.bonusState?.timer || 0,
+          bonusType: game.bonusState?.bonusType || 'wheel',
+          results: getBonusResults(game),
+        });
+      } else {
+        socket.emit('error', result.message);
+      }
+    });
+
+    socket.on('openLootbox', ({ bet, chosenIndex }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'bonus') return;
+
+      const result = openLootbox(game, socket.id, bet, chosenIndex);
+      if (result.success && result.result) {
+        socket.emit('bonusResult', result.result);
+        sendPlayerUpdate(io, game, socket.id);
+        broadcastLeaderboard(io, game);
+        io.to(roomCode).emit('bonusUpdate', {
+          timer: game.bonusState?.timer || 0,
+          bonusType: game.bonusState?.bonusType || 'lootbox',
+          results: getBonusResults(game),
         });
       } else {
         socket.emit('error', result.message);
