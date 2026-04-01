@@ -7,6 +7,7 @@ import {
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
   startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
+  assignRandomSkill, useSkill,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -53,6 +54,10 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
     position: player.position,
     pnl: Math.round(player.pnl * 100) / 100,
     unrealizedPnl: Math.round(getUnrealizedPnl(player, game.currentPrice) * 100) / 100,
+    skill: player.skill,
+    skillUsed: player.skillUsed,
+    shieldActive: player.shieldActive,
+    freezeTicksLeft: player.freezeTicksLeft,
   });
 }
 
@@ -81,6 +86,15 @@ function startTrading(io: SocketServer, game: GameState) {
       game.phase = 'trading';
       game.visibleCandleCount = 1;
       game.currentPrice = game.candles[0].close;
+
+      // Раздать скиллы всем игрокам
+      for (const player of game.players) {
+        if (player.connected) {
+          const skill = assignRandomSkill(player);
+          io.to(player.id).emit('skillAssigned', skill);
+        }
+      }
+
       broadcastState(io, game);
       broadcastLeaderboard(io, game);
 
@@ -301,6 +315,35 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       socket.emit('tradeResult', { success: result.success, message: result.message });
       sendPlayerUpdate(io, game, socket.id);
       broadcastLeaderboard(io, game);
+    });
+
+    socket.on('useSkill', () => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game) return;
+
+      const result = useSkill(game, socket.id);
+      if (result.success) {
+        socket.emit('tradeResult', result);
+        sendPlayerUpdate(io, game, socket.id);
+        if (result.skill) {
+          const player = getPlayer(game, socket.id);
+          if (player) {
+            io.to(roomCode).emit('skillUsed', { nickname: player.nickname, skill: result.skill });
+          }
+        }
+        // Inverse affects all players — broadcast state
+        if (result.affectsAll) {
+          broadcastState(io, game);
+          for (const p of game.players) {
+            if (p.connected) sendPlayerUpdate(io, game, p.id);
+          }
+        }
+        broadcastLeaderboard(io, game);
+      } else {
+        socket.emit('error', result.message);
+      }
     });
 
     socket.on('spinSlots', ({ bet }) => {

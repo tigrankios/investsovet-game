@@ -4,6 +4,7 @@ import {
   SlotResult, SlotSymbol, SLOT_SYMBOLS,
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
+  SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION,
   INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
@@ -43,6 +44,12 @@ export function addPlayer(game: GameState, id: string, nickname: string): Player
     position: null,
     pnl: 0,
     connected: true,
+    skill: null,
+    skillUsed: false,
+    pnlMultiplier: 1,
+    shieldActive: false,
+    freezePrice: null,
+    freezeTicksLeft: 0,
   };
   game.players.push(player);
   return player;
@@ -70,6 +77,16 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
     game.currentPrice = game.candles[game.visibleCandleCount - 1].close;
   }
 
+  // Обновить freeze таймеры
+  for (const player of game.players) {
+    if (player.freezeTicksLeft > 0) {
+      player.freezeTicksLeft--;
+      if (player.freezeTicksLeft <= 0) {
+        player.freezePrice = null;
+      }
+    }
+  }
+
   // Проверяем ликвидации
   const liquidated: { nickname: string; loss: number }[] = [];
   const candle = game.candles[game.visibleCandleCount - 1];
@@ -77,6 +94,15 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
     for (const player of game.players) {
       if (!player.position || !player.connected) continue;
       if (isLiquidated(player.position, candle)) {
+        // Shield: защита от ликвидации один раз
+        if (player.shieldActive) {
+          player.shieldActive = false;
+          // Сбросить цену ликвидации (дать второй шанс)
+          player.position.liquidationPrice = calcLiquidationPrice(
+            player.position.direction, game.currentPrice, player.position.leverage
+          );
+          continue;
+        }
         const loss = player.position.size;
         player.balance -= loss;
         if (player.balance < 0) player.balance = 0;
@@ -128,9 +154,19 @@ export function openPosition(
 
   const liqPrice = calcLiquidationPrice(direction, game.currentPrice, leverage);
 
+  // Double or nothing: удвоить маржу если скилл использован и нет позиции
+  let actualSize = size;
+  let doubledMsg = '';
+  if (player.skillUsed && player.skill === 'double_or_nothing' && !player.position) {
+    if (size * 2 <= player.balance) {
+      actualSize = size * 2;
+      doubledMsg = ' (ВА-БАНК x2!)';
+    }
+  }
+
   player.position = {
     direction,
-    size,
+    size: actualSize,
     leverage,
     entryPrice: game.currentPrice,
     openedAt: game.visibleCandleCount,
@@ -139,7 +175,7 @@ export function openPosition(
 
   return {
     success: true,
-    message: `${direction.toUpperCase()} x${leverage} $${size} @ ${game.currentPrice}`,
+    message: `${direction.toUpperCase()} x${leverage} $${actualSize} @ ${game.currentPrice}${doubledMsg}`,
   };
 }
 
@@ -154,11 +190,18 @@ export function closePosition(
   if (!player) return { success: false, message: 'Игрок не найден', pnl: 0 };
   if (!player.position) return { success: false, message: 'Нет открытой позиции', pnl: 0 };
 
-  const pnl = calculatePnl(player.position, game.currentPrice);
+  const price = player.freezePrice ?? game.currentPrice;
+  const basePnl = calculatePnl(player.position, price);
+  const pnl = Math.round(basePnl * player.pnlMultiplier * 100) / 100;
 
   player.balance += pnl;
   player.pnl += pnl;
   if (player.balance < 0) player.balance = 0;
+
+  // Сбросить одноразовые эффекты после закрытия позиции
+  player.pnlMultiplier = 1;
+  player.freezePrice = null;
+  player.freezeTicksLeft = 0;
 
   const msg = `Закрыто: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
   player.position = null;
@@ -181,7 +224,9 @@ export function calculatePnl(position: Position, currentPrice: number): number {
 
 export function getUnrealizedPnl(player: Player, currentPrice: number): number {
   if (!player.position) return 0;
-  return calculatePnl(player.position, currentPrice);
+  const price = player.freezePrice ?? currentPrice;
+  const basePnl = calculatePnl(player.position, price);
+  return Math.round(basePnl * player.pnlMultiplier * 100) / 100;
 }
 
 export function getLeaderboard(game: GameState): LeaderboardEntry[] {
@@ -228,6 +273,88 @@ export function endRound(game: GameState): RoundResult {
     winner: { nickname: winner.nickname, totalPnl: winner.totalPnl },
     roundNumber: game.roundNumber,
   };
+}
+
+// --- Скиллы ---
+
+export function assignRandomSkill(player: Player): SkillType {
+  const skill = ALL_SKILLS[Math.floor(Math.random() * ALL_SKILLS.length)];
+  player.skill = skill;
+  player.skillUsed = false;
+  return skill;
+}
+
+function resetPlayerSkillEffects(player: Player): void {
+  player.skill = null;
+  player.skillUsed = false;
+  player.pnlMultiplier = 1;
+  player.shieldActive = false;
+  player.freezePrice = null;
+  player.freezeTicksLeft = 0;
+}
+
+export function useSkill(
+  game: GameState,
+  playerId: string,
+): { success: boolean; message: string; skill?: SkillType; affectsAll?: boolean } {
+  const player = getPlayer(game, playerId);
+  if (!player) return { success: false, message: 'Игрок не найден' };
+  if (game.phase !== 'trading') return { success: false, message: 'Не время для скиллов' };
+  if (!player.skill) return { success: false, message: 'Нет скилла' };
+  if (player.skillUsed) return { success: false, message: 'Скилл уже использован' };
+
+  const skill = player.skill;
+  player.skillUsed = true;
+
+  switch (skill) {
+    case 'trump_tweet':
+      player.pnlMultiplier = 3;
+      return { success: true, message: '🇺🇸 ТВИТ ТРАМПА! x3 к PnL!', skill };
+
+    case 'inverse':
+      // Инвертируем оставшиеся свечи для ВСЕХ на INVERSE_DURATION свечей
+      const startIdx = game.visibleCandleCount;
+      const endIdx = Math.min(startIdx + INVERSE_DURATION, game.candles.length);
+      for (let i = startIdx; i < endIdx; i++) {
+        const c = game.candles[i];
+        const mid = (c.open + c.close) / 2;
+        c.open = 2 * mid - c.open;
+        c.close = 2 * mid - c.close;
+        c.high = 2 * mid - c.high;
+        c.low = 2 * mid - c.low;
+        // Swap high/low after inversion
+        const realHigh = Math.max(c.open, c.close, c.high, c.low);
+        const realLow = Math.min(c.open, c.close, c.high, c.low);
+        c.high = realHigh;
+        c.low = realLow;
+      }
+      return { success: true, message: '🔄 ИНВЕРСИЯ! График перевернулся!', skill, affectsAll: true };
+
+    case 'shield':
+      player.shieldActive = true;
+      return { success: true, message: '🛡️ ЩИТ АКТИВИРОВАН! Защита от ликвидации', skill };
+
+    case 'double_or_nothing':
+      if (player.position) {
+        // Удвоить маржу текущей позиции
+        const additionalSize = player.position.size;
+        if (additionalSize <= player.balance) {
+          player.position.size *= 2;
+          return { success: true, message: '💰 ВА-БАНК! Маржа удвоена!', skill };
+        } else {
+          return { success: true, message: '💰 ВА-БАНК! Недостаточно средств для удвоения', skill };
+        }
+      }
+      return { success: true, message: '💰 ВА-БАНК! Следующая позиция будет удвоена', skill };
+
+    case 'freeze':
+      player.freezePrice = game.currentPrice;
+      player.freezeTicksLeft = FREEZE_DURATION;
+      return { success: true, message: '🧊 ЗАМОРОЗКА! Цена зафиксирована на 5 свечей', skill };
+
+    default:
+      return { success: false, message: 'Неизвестный скилл' };
+  }
 }
 
 // --- Голосование "Ещё раунд?" ---
@@ -518,10 +645,11 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.voteState = null;
   game.bonusState = null;
 
-  // Сброс PnL (баланс сохраняется между раундами)
+  // Сброс PnL и скиллов (баланс сохраняется между раундами)
   for (const player of game.players) {
     player.pnl = 0;
     player.position = null;
+    resetPlayerSkillEffects(player);
   }
 
   console.log(`[Game] Round ${game.roundNumber}: ${game.ticker}, ${duration}s, ${candles.length} candles`);

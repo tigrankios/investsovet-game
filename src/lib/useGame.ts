@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
-  RoundResult, Candle, Leverage, BonusResult, BonusType,
+  RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType,
 } from './types';
 
 export function useGame() {
@@ -21,6 +21,7 @@ export function useGame() {
   const [liquidationAlert, setLiquidationAlert] = useState('');
   const [bonusResult, setBonusResult] = useState<BonusResult | null>(null);
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
+  const [skillAlert, setSkillAlert] = useState('');
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -62,6 +63,21 @@ export function useGame() {
     socket.on('bonusResult', (result) => setBonusResult(result));
     socket.on('bonusUpdate', (data) => setBonusData(data));
 
+    socket.on('skillAssigned', () => {
+      // playerUpdate will carry the skill info
+    });
+    socket.on('skillUsed', ({ nickname, skill }) => {
+      const names: Record<string, string> = {
+        trump_tweet: '🇺🇸 ТВИТ ТРАМПА',
+        inverse: '🔄 ИНВЕРСИЯ',
+        shield: '🛡️ ЩИТ',
+        double_or_nothing: '💰 ВА-БАНК',
+        freeze: '🧊 ЗАМОРОЗКА',
+      };
+      setSkillAlert(`${nickname}: ${names[skill] || skill}!`);
+      setTimeout(() => setSkillAlert(''), 3000);
+    });
+
     socket.on('error', (msg) => {
       setError(msg);
       setTimeout(() => setError(''), 3000);
@@ -79,6 +95,8 @@ export function useGame() {
       socket.off('voteUpdate');
       socket.off('bonusResult');
       socket.off('bonusUpdate');
+      socket.off('skillAssigned');
+      socket.off('skillUsed');
       socket.off('error');
     };
   }, []);
@@ -101,6 +119,7 @@ export function useGame() {
   }, []);
 
   const closePosition = useCallback(() => getSocket().emit('closePosition'), []);
+  const usePlayerSkill = useCallback(() => getSocket().emit('useSkill'), []);
 
   const spinSlots = useCallback((bet: number) => {
     getSocket().emit('spinSlots', { bet });
@@ -125,7 +144,8 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData,
-    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    bonusResult, bonusData, skillAlert,
+    createRoom, joinRoom, startGame, openPosition, closePosition, usePlayerSkill,
+    spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
-import { AVAILABLE_LEVERAGES } from '@/lib/types';
+import { AVAILABLE_LEVERAGES, SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS } from '@/lib/types';
 import type { Leverage } from '@/lib/types';
 
 const RANDOM_NICKS = [
@@ -28,8 +28,8 @@ function PlayContent() {
   const {
     gameState, playerState, countdown, roundResult, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData,
-    joinRoom, openPosition, closePosition, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    bonusResult, bonusData, skillAlert,
+    joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   } = useGame();
 
   // Reconnect: достаём данные из sessionStorage
@@ -192,6 +192,11 @@ function PlayContent() {
             {liquidationAlert}
           </div>
         )}
+        {skillAlert && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-purple-600 text-white font-bold rounded-lg px-4 py-2 z-50 animate-bounce">
+            {skillAlert}
+          </div>
+        )}
 
         {/* Header */}
         <div className="px-4 pt-4 pb-2">
@@ -232,6 +237,26 @@ function PlayContent() {
                 <p className="text-gray-500 text-xs">Ликв: {formatPrice(position.liquidationPrice)}</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Skill Button */}
+        {playerState.skill && !playerState.skillUsed && (
+          <div className="mx-4 mt-3">
+            <button
+              onClick={usePlayerSkill}
+              className="w-full py-3 rounded-xl font-bold text-lg active:scale-95 transition-all bg-gradient-to-r from-purple-600 to-pink-600 text-white animate-pulse"
+            >
+              {SKILL_EMOJIS[playerState.skill]} {SKILL_NAMES[playerState.skill]}
+              <span className="block text-xs font-normal opacity-80">{SKILL_DESCRIPTIONS[playerState.skill]}</span>
+            </button>
+          </div>
+        )}
+        {playerState.skill && playerState.skillUsed && (
+          <div className="mx-4 mt-2 text-center">
+            <span className="text-gray-500 text-sm">{SKILL_EMOJIS[playerState.skill]} {SKILL_NAMES[playerState.skill]} — использован</span>
+            {playerState.shieldActive && <span className="text-yellow-400 text-sm ml-2">🛡️ Щит активен</span>}
+            {playerState.freezeTicksLeft > 0 && <span className="text-cyan-400 text-sm ml-2">🧊 Заморозка: {playerState.freezeTicksLeft}</span>}
           </div>
         )}
 

@@ -2,6 +2,38 @@
 // InvestSovet — Trading Game Types
 // ============================================
 
+// --- Skills (Mario Kart style) ---
+export type SkillType = 'trump_tweet' | 'inverse' | 'shield' | 'double_or_nothing' | 'freeze';
+
+export const SKILL_NAMES: Record<SkillType, string> = {
+  trump_tweet: 'Твит Трампа',
+  inverse: 'Инверсия',
+  shield: 'Щит',
+  double_or_nothing: 'Ва-банк',
+  freeze: 'Заморозка',
+};
+
+export const SKILL_EMOJIS: Record<SkillType, string> = {
+  trump_tweet: '🇺🇸',
+  inverse: '🔄',
+  shield: '🛡️',
+  double_or_nothing: '💰',
+  freeze: '🧊',
+};
+
+export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
+  trump_tweet: 'x3 к PnL следующей сделки',
+  inverse: 'Инвертирует график на 10 свечей',
+  shield: 'Защита от ликвидации (1 раз)',
+  double_or_nothing: 'Удваивает маржу позиции',
+  freeze: 'Фиксирует цену на 5 свечей',
+};
+
+export const ALL_SKILLS: SkillType[] = ['trump_tweet', 'inverse', 'shield', 'double_or_nothing', 'freeze'];
+
+export const FREEZE_DURATION = 5;
+export const INVERSE_DURATION = 10;
+
 // --- Players ---
 export interface Player {
   id: string;
@@ -10,6 +42,13 @@ export interface Player {
   position: Position | null;
   pnl: number; // реализованный PnL за раунд
   connected: boolean;
+  skill: SkillType | null;       // текущий скилл (выдаётся в начале раунда)
+  skillUsed: boolean;            // использован ли скилл
+  // Активные эффекты
+  pnlMultiplier: number;         // множитель PnL (trump_tweet: 3, обычно 1)
+  shieldActive: boolean;         // защита от ликвидации
+  freezePrice: number | null;    // замороженная цена (null = не активна)
+  freezeTicksLeft: number;       // сколько тиков осталось заморозки
 }
 
 // --- Position ---
@@ -177,6 +216,9 @@ export interface ServerToClientEvents {
   tradeResult: (data: { success: boolean; message: string }) => void;
   playerUpdate: (player: ClientPlayerState) => void;
   liquidated: (data: { nickname: string; loss: number }) => void;
+  skillAssigned: (skill: SkillType) => void;
+  skillUsed: (data: { nickname: string; skill: SkillType }) => void;
+  inversed: (data: { nickname: string; ticksLeft: number }) => void;
   voteUpdate: (data: { yes: number; no: number; total: number; timer: number }) => void;
   bonusResult: (result: BonusResult) => void;
   bonusUpdate: (data: { timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] }) => void;
@@ -189,6 +231,7 @@ export interface ClientToServerEvents {
   startGame: () => void;
   openPosition: (data: { direction: 'long' | 'short'; size: number; leverage: Leverage }) => void;
   closePosition: () => void;
+  useSkill: () => void;
   spinSlots: (data: { bet: number }) => void;
   spinWheel: (data: { bet: number }) => void;
   openLootbox: (data: { bet: number; chosenIndex: number }) => void;
@@ -220,6 +263,10 @@ export interface ClientPlayerState {
   position: Position | null;
   pnl: number;
   unrealizedPnl: number;
+  skill: SkillType | null;
+  skillUsed: boolean;
+  shieldActive: boolean;
+  freezeTicksLeft: number;
 }
 
 // --- Round Result ---
