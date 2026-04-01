@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
-import { INITIAL_BALANCE, AVAILABLE_LEVERAGES } from '@/lib/types';
+import { AVAILABLE_LEVERAGES } from '@/lib/types';
 import type { Leverage } from '@/lib/types';
 
 const RANDOM_NICKS = [
@@ -28,8 +28,8 @@ function PlayContent() {
   const {
     gameState, playerState, countdown, roundResult, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
-    slotResult, slotData,
-    joinRoom, openPosition, closePosition, spinSlots, voteNextRound,
+    bonusResult, bonusData,
+    joinRoom, openPosition, closePosition, spinSlots, spinWheel, openLootbox, voteNextRound,
   } = useGame();
 
   // Reconnect: достаём данные из sessionStorage
@@ -39,10 +39,14 @@ function PlayContent() {
   const [sizePercent, setSizePercent] = useState(25);
   const [leverage, setLeverage] = useState<Leverage>(5);
   const [hasVoted, setHasVoted] = useState(false);
-  const [slotBetPercent, setSlotBetPercent] = useState(10);
-  const [hasSpun, setHasSpun] = useState(false);
-  const [spinning, setSpinning] = useState(false);
+  const [bonusBetPercent, setBonusBetPercent] = useState(10);
+  const [hasPlayed, setHasPlayed] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  // Slots animation
   const [displayReels, setDisplayReels] = useState<string[]>(['?', '?', '?']);
+  // Lootbox state
+  const [lootboxRevealed, setLootboxRevealed] = useState(false);
+  const [revealedBoxes, setRevealedBoxes] = useState<boolean[]>([false, false, false, false]);
 
   // Автоматический reconnect
   useEffect(() => {
@@ -60,9 +64,27 @@ function PlayContent() {
   // Сброс голоса и слотов при новом раунде
   useEffect(() => {
     setHasVoted(false);
-    setHasSpun(false);
+    setHasPlayed(false);
+    setAnimating(false);
     setDisplayReels(['?', '?', '?']);
+    setLootboxRevealed(false);
+    setRevealedBoxes([false, false, false, false]);
   }, [gameState?.roundNumber]);
+
+  // Lootbox reveal animation
+  useEffect(() => {
+    if (!bonusResult || bonusResult.type !== 'lootbox' || lootboxRevealed) return;
+    const chosen = bonusResult.result.chosenIndex;
+    setRevealedBoxes((prev) => { const next = [...prev]; next[chosen] = true; return next; });
+    const others = [0, 1, 2, 3].filter((i) => i !== chosen);
+    const timeouts = others.map((idx, i) =>
+      setTimeout(() => {
+        setRevealedBoxes((prev) => { const next = [...prev]; next[idx] = true; return next; });
+      }, 1000 + i * 300)
+    );
+    setLootboxRevealed(true);
+    return () => timeouts.forEach(clearTimeout);
+  }, [bonusResult, lootboxRevealed]);
 
   // --- JOIN SCREEN ---
   if (!joined) {
@@ -292,19 +314,25 @@ function PlayContent() {
     );
   }
 
-  // --- SLOTS ---
-  if (gameState.phase === 'slots' && playerState) {
-    const slotBalance = playerState.balance;
-    const slotBet = Math.floor(slotBalance * slotBetPercent / 100);
-    const timer = slotData?.timer || gameState.slotTimer;
+  // --- BONUS PHASE ---
+  if (gameState.phase === 'bonus' && playerState) {
+    const bonusBalance = playerState.balance;
+    const bonusBet = Math.floor(bonusBalance * bonusBetPercent / 100);
+    const timer = bonusData?.timer || gameState.bonusTimer;
+    const bonusType = bonusData?.bonusType || gameState.bonusType;
+
+    const BONUS_TITLES: Record<string, string> = {
+      wheel: 'КОЛЕСО ФОРТУНЫ',
+      slots: 'СЛОТ-МАШИНА',
+      lootbox: 'ЛУТБОКС',
+    };
 
     const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
 
-    const handleSpin = () => {
-      if (hasSpun || slotBet <= 0) return;
-      setSpinning(true);
-
-      // Анимация вращения барабанов
+    // --- Slots spin handler ---
+    const handleSlotSpin = () => {
+      if (hasPlayed || bonusBet <= 0) return;
+      setAnimating(true);
       let ticks = 0;
       const spinInterval = setInterval(() => {
         setDisplayReels([
@@ -315,61 +343,149 @@ function PlayContent() {
         ticks++;
         if (ticks >= 15) {
           clearInterval(spinInterval);
-          // Отправить ставку на сервер
-          spinSlots(slotBet);
-          setHasSpun(true);
-          setSpinning(false);
+          spinSlots(bonusBet);
+          setHasPlayed(true);
+          setAnimating(false);
         }
       }, 100);
     };
 
-    // Показать финальный результат — используем reels из slotResult напрямую
-    const showReels = hasSpun && slotResult ? [...slotResult.reels] : displayReels;
+    // --- Wheel spin handler ---
+    const handleWheelSpin = () => {
+      if (hasPlayed || bonusBet <= 0) return;
+      setAnimating(true);
+      setTimeout(() => {
+        spinWheel(bonusBet);
+        setHasPlayed(true);
+        setAnimating(false);
+      }, 2000);
+    };
+
+    // --- Lootbox handler ---
+    const handleLootboxChoice = (index: number) => {
+      if (hasPlayed || bonusBet <= 0) return;
+      setHasPlayed(true);
+      openLootbox(bonusBet, index);
+    };
+
+    // Derive slot display reels from result
+    const showReels = hasPlayed && bonusResult?.type === 'slots' ? [...bonusResult.result.reels] : displayReels;
+
+    // Get win info from any bonus result
+    const winAmount = bonusResult ? bonusResult.result.winAmount : null;
+    const multiplier = bonusResult ? bonusResult.result.multiplier : null;
 
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
         <p className="text-yellow-400 text-lg font-mono mb-2">{timer}с</p>
-        <h2 className="text-3xl font-black mb-6 text-yellow-400">СЛОТ-МАШИНА</h2>
+        <h2 className="text-3xl font-black mb-6 text-yellow-400">{BONUS_TITLES[bonusType || 'slots']}</h2>
 
-        {/* Reels */}
-        <div className="flex gap-4 mb-8">
-          {showReels.map((sym, i) => (
-            <div
-              key={i}
-              className={`w-24 h-24 bg-gray-900 border-2 ${spinning ? 'border-yellow-400' : hasSpun && slotResult && slotResult.multiplier > 0 ? 'border-green-400' : 'border-gray-700'} rounded-xl flex items-center justify-center text-5xl ${spinning ? 'animate-pulse' : ''}`}
-            >
-              {sym}
+        {/* === WHEEL UI === */}
+        {bonusType === 'wheel' && (
+          <>
+            {/* Wheel sectors display */}
+            <div className="grid grid-cols-4 gap-2 mb-6 w-full max-w-sm">
+              {[
+                { label: 'BUST', color: 'bg-red-600', mult: 0 },
+                { label: 'x0.5', color: 'bg-orange-500', mult: 0.5 },
+                { label: 'x1.5', color: 'bg-gray-600', mult: 1.5 },
+                { label: 'x2', color: 'bg-green-600', mult: 2 },
+                { label: 'x3', color: 'bg-blue-600', mult: 3 },
+                { label: 'x5', color: 'bg-purple-600', mult: 5 },
+                { label: 'x10', color: 'bg-yellow-600', mult: 10 },
+                { label: 'x25', color: 'bg-gradient-to-r from-pink-500 to-yellow-500', mult: 25 },
+              ].map((sector) => (
+                <div
+                  key={sector.label}
+                  className={`${sector.color} rounded-lg py-3 text-center font-bold text-sm ${
+                    hasPlayed && bonusResult?.type === 'wheel' && bonusResult.result.multiplier === sector.mult
+                      ? 'ring-4 ring-white scale-110'
+                      : hasPlayed ? 'opacity-30' : ''
+                  } transition-all`}
+                >
+                  {sector.label}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Result */}
-        {hasSpun && slotResult && (
+            {animating && (
+              <div className="text-6xl mb-6 animate-spin">🎡</div>
+            )}
+          </>
+        )}
+
+        {/* === SLOTS UI === */}
+        {bonusType === 'slots' && (
+          <div className="flex gap-4 mb-8">
+            {showReels.map((sym, i) => (
+              <div
+                key={i}
+                className={`w-24 h-24 bg-gray-900 border-2 ${animating ? 'border-yellow-400' : hasPlayed && bonusResult?.type === 'slots' && bonusResult.result.multiplier > 0 ? 'border-green-400' : 'border-gray-700'} rounded-xl flex items-center justify-center text-5xl ${animating ? 'animate-pulse' : ''}`}
+              >
+                {sym}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* === LOOTBOX UI === */}
+        {bonusType === 'lootbox' && (
+          <div className="grid grid-cols-2 gap-4 mb-6 w-full max-w-sm">
+            {[0, 1, 2, 3].map((i) => {
+              const isRevealed = revealedBoxes[i];
+              const isChosen = bonusResult?.type === 'lootbox' && bonusResult.result.chosenIndex === i;
+              const boxValue = bonusResult?.type === 'lootbox' ? bonusResult.result.boxes[i] : null;
+
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleLootboxChoice(i)}
+                  disabled={hasPlayed}
+                  className={`h-28 rounded-xl font-black text-2xl transition-all active:scale-95 ${
+                    isRevealed
+                      ? isChosen
+                        ? boxValue !== null && boxValue >= 2 ? 'bg-green-600 ring-4 ring-green-400' : 'bg-red-600 ring-4 ring-red-400'
+                        : 'bg-gray-800 opacity-60'
+                      : 'bg-gradient-to-br from-yellow-500 to-orange-600 hover:scale-105'
+                  }`}
+                >
+                  {isRevealed && boxValue !== null
+                    ? boxValue === 0 ? 'BUST' : `x${boxValue}`
+                    : hasPlayed ? '...' : '🎁'
+                  }
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* === Result display (all types) === */}
+        {hasPlayed && winAmount !== null && multiplier !== null && !animating && (
           <div className="mb-6 text-center">
-            <p className={`text-3xl font-black ${slotResult.winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {slotResult.multiplier > 0 ? `x${slotResult.multiplier}` : 'МИМО'}
+            <p className={`text-3xl font-black ${winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {multiplier > 0 ? `x${multiplier}` : 'МИМО'}
             </p>
-            <p className={`text-xl font-bold mt-1 ${slotResult.winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {slotResult.winAmount >= 0 ? '+' : ''}{slotResult.winAmount.toFixed(0)}$
+            <p className={`text-xl font-bold mt-1 ${winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {winAmount >= 0 ? '+' : ''}{winAmount.toFixed(0)}$
             </p>
-            {slotResult.multiplier >= 5 && (
-              <p className="text-yellow-400 text-lg mt-2 animate-bounce">JACKPOT!</p>
+            {multiplier >= 10 && (
+              <p className="text-yellow-400 text-lg mt-2 animate-bounce font-black">JACKPOT!</p>
             )}
           </div>
         )}
 
-        {/* Bet controls */}
-        {!hasSpun && !spinning && (
+        {/* === Bet controls (shared for all types) === */}
+        {!hasPlayed && !animating && (
           <>
             <div className="w-full max-w-sm mb-4">
-              <p className="text-gray-400 text-sm mb-2 text-center">Ставка: ${slotBet.toLocaleString()}</p>
+              <p className="text-gray-400 text-sm mb-2 text-center">Ставка: ${bonusBet.toLocaleString()}</p>
               <div className="flex gap-2">
                 {[5, 10, 25, 50].map((pct) => (
                   <button
                     key={pct}
-                    onClick={() => setSlotBetPercent(pct)}
+                    onClick={() => setBonusBetPercent(pct)}
                     className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
-                      slotBetPercent === pct
+                      bonusBetPercent === pct
                         ? 'bg-yellow-400 text-black'
                         : 'bg-gray-900 text-gray-400 border border-gray-800'
                     }`}
@@ -380,21 +496,27 @@ function PlayContent() {
               </div>
             </div>
 
-            <button
-              onClick={handleSpin}
-              disabled={slotBet <= 0}
-              className="bg-yellow-400 text-black font-black text-2xl px-12 py-5 rounded-xl active:scale-95 transition-all disabled:opacity-30"
-            >
-              КРУТИТЬ
-            </button>
+            {bonusType === 'lootbox' ? (
+              <p className="text-gray-400 text-lg">Выбери коробку!</p>
+            ) : (
+              <button
+                onClick={bonusType === 'wheel' ? handleWheelSpin : handleSlotSpin}
+                disabled={bonusBet <= 0}
+                className="bg-yellow-400 text-black font-black text-2xl px-12 py-5 rounded-xl active:scale-95 transition-all disabled:opacity-30"
+              >
+                КРУТИТЬ
+              </button>
+            )}
           </>
         )}
 
-        {!hasSpun && spinning && (
-          <p className="text-yellow-400 text-xl animate-pulse font-bold">Крутим...</p>
+        {!hasPlayed && animating && (
+          <p className="text-yellow-400 text-xl animate-pulse font-bold">
+            {bonusType === 'wheel' ? 'Крутим колесо...' : 'Крутим...'}
+          </p>
         )}
 
-        <p className="text-gray-600 text-sm mt-4">Баланс: ${slotBalance.toFixed(0)}</p>
+        <p className="text-gray-600 text-sm mt-4">Баланс: ${bonusBalance.toFixed(0)}</p>
       </div>
     );
   }
