@@ -114,6 +114,10 @@ export function useGame() {
     getSocket().emit('openLootbox', { bet, chosenIndex });
   }, []);
 
+  const playLoto = useCallback((bet: number, numbers: number[]) => {
+    getSocket().emit('playLoto', { bet, numbers });
+  }, []);
+
   const voteNextRound = useCallback((vote: boolean) => {
     getSocket().emit('voteNextRound', { vote });
   }, []);
@@ -122,6 +126,6 @@ export function useGame() {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
     bonusResult, bonusData,
-    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, spinWheel, openLootbox, voteNextRound,
+    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };
 }

@@ -6,7 +6,7 @@ import {
   createGame, addPlayer, removePlayer, getPlayer,
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
-  startBonus, spinSlots, spinWheel, openLootbox, getBonusResults,
+  startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -359,6 +359,27 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         io.to(roomCode).emit('bonusUpdate', {
           timer: game.bonusState?.timer || 0,
           bonusType: game.bonusState?.bonusType || 'lootbox',
+          results: getBonusResults(game),
+        });
+      } else {
+        socket.emit('error', result.message);
+      }
+    });
+
+    socket.on('playLoto', ({ bet, numbers }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game || game.phase !== 'bonus') return;
+
+      const result = playLoto(game, socket.id, bet, numbers);
+      if (result.success && result.result) {
+        socket.emit('bonusResult', result.result);
+        sendPlayerUpdate(io, game, socket.id);
+        broadcastLeaderboard(io, game);
+        io.to(roomCode).emit('bonusUpdate', {
+          timer: game.bonusState?.timer || 0,
+          bonusType: game.bonusState?.bonusType || 'loto',
           results: getBonusResults(game),
         });
       } else {

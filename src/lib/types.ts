@@ -44,7 +44,7 @@ export interface SlotResult {
 }
 
 // --- Bonus Phase (rotating mini-games) ---
-export type BonusType = 'wheel' | 'slots' | 'lootbox';
+export type BonusType = 'wheel' | 'slots' | 'lootbox' | 'loto';
 export const BONUS_TIMER_SEC = 15;
 
 export interface WheelSector {
@@ -90,10 +90,33 @@ export interface LootboxResult {
   winAmount: number;
 }
 
+export const LOTO_NUMBERS_TOTAL = 20;
+export const LOTO_PICK_COUNT = 5;
+export const LOTO_DRAW_COUNT = 5;
+
+export const LOTO_PAYOUTS: Record<number, number> = {
+  0: 0,
+  1: 0.5,
+  2: 1.5,
+  3: 3,
+  4: 10,
+  5: 50,
+};
+
+export interface LotoResult {
+  playerNumbers: number[];
+  drawnNumbers: number[];
+  matches: number;
+  multiplier: number;
+  bet: number;
+  winAmount: number;
+}
+
 export type BonusResult =
   | { type: 'slots'; result: SlotResult }
   | { type: 'wheel'; result: WheelResult }
-  | { type: 'lootbox'; result: LootboxResult };
+  | { type: 'lootbox'; result: LootboxResult }
+  | { type: 'loto'; result: LotoResult };
 
 export interface BonusState {
   bonusType: BonusType;
@@ -169,6 +192,7 @@ export interface ClientToServerEvents {
   spinSlots: (data: { bet: number }) => void;
   spinWheel: (data: { bet: number }) => void;
   openLootbox: (data: { bet: number; chosenIndex: number }) => void;
+  playLoto: (data: { bet: number; numbers: number[] }) => void;
   voteNextRound: (data: { vote: boolean }) => void;
 }
 

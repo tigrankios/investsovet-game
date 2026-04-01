@@ -29,7 +29,7 @@ function PlayContent() {
     gameState, playerState, countdown, roundResult, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
     bonusResult, bonusData,
-    joinRoom, openPosition, closePosition, spinSlots, spinWheel, openLootbox, voteNextRound,
+    joinRoom, openPosition, closePosition, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   } = useGame();
 
   // Reconnect: достаём данные из sessionStorage
@@ -47,6 +47,8 @@ function PlayContent() {
   // Lootbox state
   const [lootboxRevealed, setLootboxRevealed] = useState(false);
   const [revealedBoxes, setRevealedBoxes] = useState<boolean[]>([false, false, false, false]);
+  // Loto state
+  const [lotoNumbers, setLotoNumbers] = useState<number[]>([]);
 
   // Автоматический reconnect
   useEffect(() => {
@@ -69,6 +71,7 @@ function PlayContent() {
     setDisplayReels(['?', '?', '?']);
     setLootboxRevealed(false);
     setRevealedBoxes([false, false, false, false]);
+    setLotoNumbers([]);
   }, [gameState?.roundNumber]);
 
   // Lootbox reveal animation
@@ -325,6 +328,7 @@ function PlayContent() {
       wheel: 'КОЛЕСО ФОРТУНЫ',
       slots: 'СЛОТ-МАШИНА',
       lootbox: 'ЛУТБОКС',
+      loto: 'ЛОТО',
     };
 
     const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
@@ -366,6 +370,20 @@ function PlayContent() {
       if (hasPlayed || bonusBet <= 0) return;
       setHasPlayed(true);
       openLootbox(bonusBet, index);
+    };
+
+    // --- Loto handlers ---
+    const toggleLotoNumber = (n: number) => {
+      if (hasPlayed) return;
+      setLotoNumbers((prev) =>
+        prev.includes(n) ? prev.filter((x) => x !== n) : prev.length < 5 ? [...prev, n] : prev
+      );
+    };
+
+    const handleLotoPlay = () => {
+      if (hasPlayed || bonusBet <= 0 || lotoNumbers.length !== 5) return;
+      setHasPlayed(true);
+      playLoto(bonusBet, lotoNumbers);
     };
 
     // Derive slot display reels from result
@@ -459,6 +477,58 @@ function PlayContent() {
           </div>
         )}
 
+        {/* === LOTO UI === */}
+        {bonusType === 'loto' && (
+          <div className="w-full max-w-sm mb-6">
+            <div className="grid grid-cols-5 gap-2 mb-4">
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
+                const isSelected = lotoNumbers.includes(n);
+                const isDrawn = bonusResult?.type === 'loto' && bonusResult.result.drawnNumbers.includes(n);
+                const isMatch = isDrawn && bonusResult?.type === 'loto' && bonusResult.result.playerNumbers.includes(n);
+                const isPlayerOnly = !isDrawn && bonusResult?.type === 'loto' && bonusResult.result.playerNumbers.includes(n);
+
+                return (
+                  <button
+                    key={n}
+                    onClick={() => toggleLotoNumber(n)}
+                    disabled={hasPlayed}
+                    className={`h-12 rounded-lg font-bold text-lg transition-all active:scale-95 ${
+                      hasPlayed
+                        ? isMatch
+                          ? 'bg-green-500 text-black ring-2 ring-green-300 scale-110'
+                          : isDrawn
+                            ? 'bg-yellow-500 text-black'
+                            : isPlayerOnly
+                              ? 'bg-red-500/50 text-white'
+                              : 'bg-gray-900 text-gray-600'
+                        : isSelected
+                          ? 'bg-yellow-400 text-black scale-105'
+                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+            {!hasPlayed && (
+              <p className="text-center text-gray-400 text-sm">
+                Выбрано: {lotoNumbers.length}/5
+              </p>
+            )}
+            {hasPlayed && bonusResult?.type === 'loto' && (
+              <div className="text-center mt-2">
+                <p className="text-gray-400 text-sm">
+                  Выпало: {bonusResult.result.drawnNumbers.join(', ')}
+                </p>
+                <p className="text-white text-sm">
+                  Совпадений: {bonusResult.result.matches}/5
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* === Result display (all types) === */}
         {hasPlayed && winAmount !== null && multiplier !== null && !animating && (
           <div className="mb-6 text-center">
@@ -498,6 +568,14 @@ function PlayContent() {
 
             {bonusType === 'lootbox' ? (
               <p className="text-gray-400 text-lg">Выбери коробку!</p>
+            ) : bonusType === 'loto' ? (
+              <button
+                onClick={handleLotoPlay}
+                disabled={bonusBet <= 0 || lotoNumbers.length !== 5}
+                className="bg-yellow-400 text-black font-black text-2xl px-12 py-5 rounded-xl active:scale-95 transition-all disabled:opacity-30"
+              >
+                ИГРАТЬ
+              </button>
             ) : (
               <button
                 onClick={bonusType === 'wheel' ? handleWheelSpin : handleSlotSpin}
@@ -512,7 +590,7 @@ function PlayContent() {
 
         {!hasPlayed && animating && (
           <p className="text-yellow-400 text-xl animate-pulse font-bold">
-            {bonusType === 'wheel' ? 'Крутим колесо...' : 'Крутим...'}
+            {bonusType === 'wheel' ? 'Крутим колесо...' : bonusType === 'loto' ? 'Тянем шары...' : 'Крутим...'}
           </p>
         )}
 

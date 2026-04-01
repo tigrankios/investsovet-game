@@ -168,12 +168,14 @@ export default function TVPage() {
       wheel: 'КОЛЕСО ФОРТУНЫ',
       slots: 'СЛОТ-МАШИНА',
       lootbox: 'ЛУТБОКС',
+      loto: 'ЛОТО',
     };
 
     const BONUS_EMOJIS: Record<string, string> = {
       wheel: '🎡',
       slots: '🎰',
       lootbox: '🎁',
+      loto: '🎲',
     };
 
     return (
@@ -181,7 +183,7 @@ export default function TVPage() {
         <div className="text-6xl mb-2">{BONUS_EMOJIS[bonusType || 'slots']}</div>
         <h1 className="text-6xl font-black text-yellow-400 mb-2">{BONUS_TITLES[bonusType || 'slots']}</h1>
         <p className="text-gray-400 text-xl mb-4">
-          {bonusType === 'wheel' ? 'Игроки крутят колесо...' : bonusType === 'lootbox' ? 'Игроки выбирают коробки...' : 'Игроки крутят барабаны...'}
+          {bonusType === 'wheel' ? 'Игроки крутят колесо...' : bonusType === 'lootbox' ? 'Игроки выбирают коробки...' : bonusType === 'loto' ? 'Игроки выбирают числа...' : 'Игроки крутят барабаны...'}
         </p>
         <p className="text-yellow-400 text-4xl font-mono font-bold mb-8">{timer}с</p>
 
@@ -196,6 +198,8 @@ export default function TVPage() {
                 detail = `Сектор: ${multiplier > 0 ? `x${multiplier}` : 'BUST'}`;
               } else if (result.type === 'lootbox') {
                 detail = `Коробка ${result.result.chosenIndex + 1}: ${multiplier > 0 ? `x${multiplier}` : 'BUST'}`;
+              } else if (result.type === 'loto') {
+                detail = `${result.result.matches}/5 совпадений`;
               }
 
               return (

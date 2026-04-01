@@ -1,8 +1,9 @@
 import {
   GameState, Player, Position, LeaderboardEntry, RoundResult, Leverage, VoteState,
-  BonusState, BonusType, BonusResult, WheelResult, LootboxResult,
+  BonusState, BonusType, BonusResult, WheelResult, LootboxResult, LotoResult,
   SlotResult, SlotSymbol, SLOT_SYMBOLS,
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
+  LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
   INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
@@ -257,9 +258,10 @@ export function getVoteResult(game: GameState): { yes: number; no: number; total
 // --- Бонусная фаза (ротация мини-игр) ---
 
 function getBonusType(roundNumber: number): BonusType {
-  const mod = roundNumber % 3;
+  const mod = roundNumber % 4;
   if (mod === 1) return 'wheel';
   if (mod === 2) return 'slots';
+  if (mod === 3) return 'loto';
   return 'lootbox';
 }
 
@@ -432,6 +434,63 @@ export function openLootbox(
   game.bonusState.played[playerId] = bonusResult;
 
   return { success: true, message: `Лутбокс: x${multiplier}`, result: bonusResult };
+}
+
+// --- Лото ---
+
+function drawLotoNumbers(): number[] {
+  const pool = Array.from({ length: LOTO_NUMBERS_TOTAL }, (_, i) => i + 1);
+  const drawn: number[] = [];
+  for (let i = 0; i < LOTO_DRAW_COUNT; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    drawn.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return drawn.sort((a, b) => a - b);
+}
+
+export function playLoto(
+  game: GameState,
+  playerId: string,
+  bet: number,
+  numbers: number[],
+): { success: boolean; message: string; result?: BonusResult } {
+  const player = getPlayer(game, playerId);
+  if (!player) return { success: false, message: 'Игрок не найден' };
+  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
+  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
+  if (game.bonusState.bonusType !== 'loto') return { success: false, message: 'Сейчас не лото' };
+  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
+  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
+  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+  if (!Array.isArray(numbers) || numbers.length !== LOTO_PICK_COUNT) return { success: false, message: `Выбери ${LOTO_PICK_COUNT} чисел` };
+  const unique = new Set(numbers);
+  if (unique.size !== LOTO_PICK_COUNT) return { success: false, message: 'Числа не должны повторяться' };
+  if (numbers.some((n) => !Number.isInteger(n) || n < 1 || n > LOTO_NUMBERS_TOTAL)) {
+    return { success: false, message: `Числа от 1 до ${LOTO_NUMBERS_TOTAL}` };
+  }
+
+  const drawnNumbers = drawLotoNumbers();
+  const drawnSet = new Set(drawnNumbers);
+  const matches = numbers.filter((n) => drawnSet.has(n)).length;
+  const multiplier = LOTO_PAYOUTS[matches] ?? 0;
+  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+
+  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  if (player.balance < 0) player.balance = 0;
+
+  const lotoResult: LotoResult = {
+    playerNumbers: [...numbers].sort((a, b) => a - b),
+    drawnNumbers,
+    matches,
+    multiplier,
+    bet,
+    winAmount,
+  };
+  const bonusResult: BonusResult = { type: 'loto', result: lotoResult };
+  game.bonusState.played[playerId] = bonusResult;
+
+  return { success: true, message: `Лото: ${matches} совпадений`, result: bonusResult };
 }
 
 // --- Результаты бонуса ---
