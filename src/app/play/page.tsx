@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
 import { SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS } from '@/lib/types';
-import type { Leverage } from '@/lib/types';
+import type { Leverage, Candle } from '@/lib/types';
 
 const RANDOM_NICKS = [
   'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
@@ -26,7 +26,7 @@ function PlayContent() {
   const roomFromUrl = searchParams.get('room') || '';
 
   const {
-    gameState, playerState, countdown, roundResult, currentPrice,
+    gameState, playerState, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
     bonusResult, bonusData, skillAlert, finalStats,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
@@ -233,6 +233,13 @@ function PlayContent() {
             </>
           )}
         </div>
+
+        {/* Chart */}
+        {!isBlind && candles.length > 0 && (
+          <div className="mx-4 mt-2 h-32">
+            <MiniChart candles={candles} />
+          </div>
+        )}
 
         {/* Position */}
         {position && (
@@ -750,6 +757,44 @@ function PlayContent() {
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
       <p className="animate-pulse text-xl">Загрузка...</p>
     </div>
+  );
+}
+
+function MiniChart({ candles }: { candles: Candle[] }) {
+  if (candles.length === 0) return null;
+
+  const width = 400;
+  const height = 120;
+  const pad = { top: 4, right: 4, bottom: 4, left: 4 };
+  const chartW = width - pad.left - pad.right;
+  const chartH = height - pad.top - pad.bottom;
+
+  const visible = candles.slice(-60);
+  const maxP = Math.max(...visible.map((c) => c.high));
+  const minP = Math.min(...visible.map((c) => c.low));
+  const range = maxP - minP || 1;
+
+  const gap = chartW / visible.length;
+  const candleW = Math.max(1, gap * 0.6);
+  const scaleY = (p: number) => pad.top + chartH - ((p - minP) / range) * chartH;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+      <rect x={0} y={0} width={width} height={height} fill="#0a0a0a" rx={6} />
+      {visible.map((c, i) => {
+        const x = pad.left + i * gap + gap / 2;
+        const isGreen = c.close >= c.open;
+        const color = isGreen ? '#22c55e' : '#ef4444';
+        const bodyTop = scaleY(Math.max(c.open, c.close));
+        const bodyBot = scaleY(Math.min(c.open, c.close));
+        return (
+          <g key={i}>
+            <line x1={x} y1={scaleY(c.high)} x2={x} y2={scaleY(c.low)} stroke={color} strokeWidth={0.8} />
+            <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={Math.max(0.5, bodyBot - bodyTop)} fill={color} />
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
