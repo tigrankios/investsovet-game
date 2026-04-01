@@ -177,11 +177,17 @@ function startBonusPhase(io: SocketServer, game: GameState) {
       }
       broadcastLeaderboard(io, game);
 
-      // Через 2 секунды — новый раунд (без голосования)
+      // Через 2 секунды — новый раунд или конец игры
       setTimeout(async () => {
-        await setupNextRound(game);
-        broadcastState(io, game);
-        startTrading(io, game);
+        if (game.roundNumber >= 6) {
+          game.phase = 'finished';
+          broadcastState(io, game);
+          broadcastLeaderboard(io, game);
+        } else {
+          await setupNextRound(game);
+          broadcastState(io, game);
+          startTrading(io, game);
+        }
       }, 2000);
     }
   }, 1000);
