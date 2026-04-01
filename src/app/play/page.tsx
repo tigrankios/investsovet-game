@@ -182,14 +182,6 @@ function PlayContent() {
 
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
-        {/* Blind overlay */}
-        {isBlind && (
-          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 pointer-events-none">
-            <div className="text-8xl mb-4">🙈</div>
-            <p className="text-3xl font-black text-yellow-400 animate-pulse">СЛЕПОЙ ТРЕЙД</p>
-            <p className="text-xl text-gray-400 mt-2">{playerState.blindTicksLeft}с</p>
-          </div>
-        )}
         {/* Toast */}
         {tradeMessage && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm z-50">
@@ -209,22 +201,32 @@ function PlayContent() {
 
         {/* Header */}
         <div className="px-4 pt-4 pb-2">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-gray-500 text-xs uppercase">Баланс</p>
-              <p className="text-2xl font-mono font-bold">${totalBalance.toFixed(2)}</p>
+          {isBlind ? (
+            <div className="flex flex-col items-center py-4">
+              <div className="text-5xl mb-2">🙈</div>
+              <p className="text-xl font-black text-yellow-400 animate-pulse">СЛЕПОЙ ТРЕЙД</p>
+              <p className="text-gray-400 mt-1">{playerState.blindTicksLeft}с</p>
             </div>
-            <div className="text-right">
-              <p className="text-gray-500 text-xs uppercase">PnL</p>
-              <p className={`text-2xl font-mono font-bold ${playerState.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {playerState.pnl >= 0 ? '+' : ''}{playerState.pnl.toFixed(2)}$
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-3 mt-3">
-            <span className="text-yellow-400 font-bold">{gameState.ticker}</span>
-            <span className="text-xl font-mono font-bold">{formatPrice(currentPrice)}</span>
-          </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-gray-500 text-xs uppercase">Баланс</p>
+                  <p className="text-2xl font-mono font-bold">${totalBalance.toFixed(2)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-gray-500 text-xs uppercase">PnL</p>
+                  <p className={`text-2xl font-mono font-bold ${playerState.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {playerState.pnl >= 0 ? '+' : ''}{playerState.pnl.toFixed(2)}$
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <span className="text-yellow-400 font-bold">{gameState.ticker}</span>
+                <span className="text-xl font-mono font-bold">{formatPrice(currentPrice)}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Position */}
@@ -239,12 +241,16 @@ function PlayContent() {
                 </span>
                 <span className="text-gray-400 ml-2">${position.size}</span>
               </div>
-              <div className="text-right">
-                <p className={`font-mono font-bold ${unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(2)}$
-                </p>
-                <p className="text-gray-500 text-xs">Ликв: {formatPrice(position.liquidationPrice)}</p>
-              </div>
+              {isBlind ? (
+                <span className="text-gray-500 font-mono">???</span>
+              ) : (
+                <div className="text-right">
+                  <p className={`font-mono font-bold ${unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(2)}$
+                  </p>
+                  <p className="text-gray-500 text-xs">Ликв: {formatPrice(position.liquidationPrice)}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
