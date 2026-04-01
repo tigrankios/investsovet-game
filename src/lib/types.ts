@@ -201,7 +201,8 @@ export interface GameState {
   roundNumber: number;
   voteState: VoteState | null;
   bonusState: BonusState | null;
-  lastAggressorId: string | null; // кто последний применил агрессивный скилл
+  lastAggressorId: string | null;
+  availableLeverages: Leverage[];
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -268,6 +269,7 @@ export interface ClientGameState {
   voteTimer: number;
   bonusTimer: number;
   bonusType: BonusType | null;
+  availableLeverages: Leverage[];
 }
 
 export interface ClientPlayerState {

@@ -35,6 +35,7 @@ function getClientGameState(game: GameState): ClientGameState {
     voteTimer: game.voteState?.timer || 0,
     bonusTimer: game.bonusState?.timer || 0,
     bonusType: game.bonusState?.bonusType || null,
+    availableLeverages: game.availableLeverages,
   };
 }
 

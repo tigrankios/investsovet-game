@@ -5,7 +5,7 @@ import {
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
   SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION, BLIND_DURATION,
-  INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC,
+  INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
 
@@ -34,6 +34,7 @@ export async function createGame(): Promise<GameState> {
     voteState: null,
     bonusState: null,
     lastAggressorId: null,
+    availableLeverages: [...AVAILABLE_LEVERAGES],
   };
 }
 
@@ -163,6 +164,7 @@ export function openPosition(
   if (!player) return { success: false, message: 'Игрок не найден' };
   if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
   if (player.position) return { success: false, message: 'Закрой текущую позицию' };
+  if (!game.availableLeverages.includes(leverage)) return { success: false, message: 'Это плечо больше недоступно' };
   if (size <= 0) return { success: false, message: 'Некорректная сумма' };
   if (size > player.balance) return { success: false, message: 'Недостаточно средств' };
 
@@ -699,6 +701,11 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.voteState = null;
   game.bonusState = null;
   game.lastAggressorId = null;
+
+  // Убрать наименьшее плечо (пока не останется только 500x)
+  if (game.availableLeverages.length > 1) {
+    game.availableLeverages = game.availableLeverages.slice(1);
+  }
 
   // Сброс PnL и скиллов (баланс сохраняется между раундами)
   for (const player of game.players) {

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
-import { AVAILABLE_LEVERAGES, SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS } from '@/lib/types';
+import { SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS } from '@/lib/types';
 import type { Leverage } from '@/lib/types';
 
 const RANDOM_NICKS = [
@@ -72,6 +72,11 @@ function PlayContent() {
     setLootboxRevealed(false);
     setRevealedBoxes([false, false, false, false]);
     setLotoNumbers([]);
+    // Автовыбор плеча если текущее стало недоступным
+    const avail = gameState?.availableLeverages;
+    if (avail && avail.length > 0 && !avail.includes(leverage)) {
+      setLeverage(avail[0]);
+    }
   }, [gameState?.roundNumber]);
 
   // Lootbox reveal animation
@@ -295,7 +300,7 @@ function PlayContent() {
               <div>
                 <p className="text-gray-500 text-xs mb-1">Плечо</p>
                 <div className="flex gap-1.5">
-                  {AVAILABLE_LEVERAGES.map((lev) => (
+                  {(gameState.availableLeverages || [500]).map((lev) => (
                     <button
                       key={lev}
                       onClick={() => setLeverage(lev)}
