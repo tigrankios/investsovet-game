@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
-  RoundResult, Candle, Leverage, SlotResult,
+  RoundResult, Candle, Leverage, BonusResult, BonusType,
 } from './types';
 
 export function useGame() {
@@ -19,8 +19,8 @@ export function useGame() {
   const [currentPrice, setCurrentPrice] = useState(0);
   const [voteData, setVoteData] = useState<{ yes: number; no: number; total: number; timer: number } | null>(null);
   const [liquidationAlert, setLiquidationAlert] = useState('');
-  const [slotResult, setSlotResult] = useState<SlotResult | null>(null);
-  const [slotData, setSlotData] = useState<{ timer: number; results: { nickname: string; result: SlotResult }[] } | null>(null);
+  const [bonusResult, setBonusResult] = useState<BonusResult | null>(null);
+  const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -58,8 +58,8 @@ export function useGame() {
 
     socket.on('voteUpdate', (data) => setVoteData(data));
 
-    socket.on('slotResult', (result) => setSlotResult(result));
-    socket.on('slotUpdate', (data) => setSlotData(data));
+    socket.on('bonusResult', (result) => setBonusResult(result));
+    socket.on('bonusUpdate', (data) => setBonusData(data));
 
     socket.on('error', (msg) => {
       setError(msg);
@@ -76,8 +76,8 @@ export function useGame() {
       socket.off('tradeResult');
       socket.off('liquidated');
       socket.off('voteUpdate');
-      socket.off('slotResult');
-      socket.off('slotUpdate');
+      socket.off('bonusResult');
+      socket.off('bonusUpdate');
       socket.off('error');
     };
   }, []);
@@ -105,6 +105,14 @@ export function useGame() {
     getSocket().emit('spinSlots', { bet });
   }, []);
 
+  const spinWheel = useCallback((bet: number) => {
+    getSocket().emit('spinWheel', { bet });
+  }, []);
+
+  const openLootbox = useCallback((bet: number, chosenIndex: number) => {
+    getSocket().emit('openLootbox', { bet, chosenIndex });
+  }, []);
+
   const voteNextRound = useCallback((vote: boolean) => {
     getSocket().emit('voteNextRound', { vote });
   }, []);
@@ -112,7 +120,7 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    slotResult, slotData,
-    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, voteNextRound,
+    bonusResult, bonusData,
+    createRoom, joinRoom, startGame, openPosition, closePosition, spinSlots, spinWheel, openLootbox, voteNextRound,
   };
 }
