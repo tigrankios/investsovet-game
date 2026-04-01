@@ -221,6 +221,8 @@ export interface LeaderboardEntry {
   hasPosition: boolean;
   positionDirection: 'long' | 'short' | null;
   positionLeverage: Leverage | null;
+  positionOpenedAt: number | null;
+  positionEntryPrice: number | null;
 }
 
 export interface FinalPlayerStats {

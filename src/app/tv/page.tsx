@@ -143,7 +143,7 @@ export default function TVPage() {
         {/* Chart + Leaderboard */}
         <div className="flex-1 flex">
           <div className="flex-1 p-4">
-            <CandlestickChart candles={candles} />
+            <CandlestickChart candles={candles} positions={leaderboard} />
           </div>
           <div className="w-[500px] border-l border-gray-800 p-6 overflow-y-auto">
             <h3 className="text-gray-400 text-xl font-bold mb-5 uppercase tracking-wider">Лидерборд</h3>
@@ -349,7 +349,7 @@ function PriceDisplay({ price, candles }: { price: number; candles: Candle[] }) 
   );
 }
 
-function CandlestickChart({ candles }: { candles: Candle[] }) {
+function CandlestickChart({ candles, positions = [] }: { candles: Candle[]; positions?: LeaderboardEntry[] }) {
   if (candles.length === 0) return null;
 
   const width = 1200;
@@ -420,6 +420,28 @@ function CandlestickChart({ candles }: { candles: Candle[] }) {
       >
         {formatPrice(lastPrice)}
       </text>
+
+      {/* Position markers */}
+      {positions.filter((p) => p.hasPosition && p.positionOpenedAt !== null && p.positionEntryPrice !== null).map((p, idx) => {
+        const candleIdx = p.positionOpenedAt! - (candles.length - visible.length);
+        if (candleIdx < 0 || candleIdx >= visible.length) return null;
+        const x = padding.left + candleIdx * gap + gap / 2;
+        const y = scaleY(p.positionEntryPrice!);
+        const isLong = p.positionDirection === 'long';
+        const color = isLong ? '#22c55e' : '#ef4444';
+        const arrow = isLong ? '▲' : '▼';
+        // Offset multiple markers vertically
+        const yOffset = idx * 18;
+        return (
+          <g key={p.nickname}>
+            <line x1={x} y1={y} x2={width - padding.right} y2={y} stroke={color} strokeWidth={0.8} strokeDasharray="3,3" opacity={0.5} />
+            <circle cx={x} cy={y} r={5} fill={color} />
+            <text x={x + 8} y={y - 8 - yOffset} fill={color} fontSize={12} fontFamily="sans-serif" fontWeight="bold">
+              {arrow} {p.nickname}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }

@@ -274,6 +274,8 @@ export function getLeaderboard(game: GameState): LeaderboardEntry[] {
         hasPosition: !!p.position,
         positionDirection: p.position?.direction || null,
         positionLeverage: p.position?.leverage || null,
+        positionOpenedAt: p.position?.openedAt ?? null,
+        positionEntryPrice: p.position?.entryPrice ?? null,
       };
     })
     .sort((a, b) => b.balance - a.balance);

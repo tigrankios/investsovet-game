@@ -26,7 +26,7 @@ function PlayContent() {
   const roomFromUrl = searchParams.get('room') || '';
 
   const {
-    gameState, playerState, countdown, roundResult, candles, currentPrice,
+    gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
     bonusResult, bonusData, skillAlert, finalStats,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
@@ -237,7 +237,7 @@ function PlayContent() {
         {/* Chart */}
         {!isBlind && candles.length > 0 && (
           <div className="mx-4 mt-2 h-32">
-            <MiniChart candles={candles} />
+            <MiniChart candles={candles} positions={leaderboard} />
           </div>
         )}
 
@@ -760,7 +760,7 @@ function PlayContent() {
   );
 }
 
-function MiniChart({ candles }: { candles: Candle[] }) {
+function MiniChart({ candles, positions = [] }: { candles: Candle[]; positions?: import('@/lib/types').LeaderboardEntry[] }) {
   if (candles.length === 0) return null;
 
   const width = 400;
@@ -770,6 +770,7 @@ function MiniChart({ candles }: { candles: Candle[] }) {
   const chartH = height - pad.top - pad.bottom;
 
   const visible = candles.slice(-60);
+  const visibleOffset = candles.length - visible.length;
   const maxP = Math.max(...visible.map((c) => c.high));
   const minP = Math.min(...visible.map((c) => c.low));
   const range = maxP - minP || 1;
@@ -791,6 +792,24 @@ function MiniChart({ candles }: { candles: Candle[] }) {
           <g key={i}>
             <line x1={x} y1={scaleY(c.high)} x2={x} y2={scaleY(c.low)} stroke={color} strokeWidth={0.8} />
             <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={Math.max(0.5, bodyBot - bodyTop)} fill={color} />
+          </g>
+        );
+      })}
+      {/* Position markers */}
+      {positions.filter((p) => p.hasPosition && p.positionOpenedAt !== null && p.positionEntryPrice !== null).map((p, idx) => {
+        const candleIdx = p.positionOpenedAt! - visibleOffset;
+        if (candleIdx < 0 || candleIdx >= visible.length) return null;
+        const x = pad.left + candleIdx * gap + gap / 2;
+        const y = scaleY(p.positionEntryPrice!);
+        const isLong = p.positionDirection === 'long';
+        const color = isLong ? '#22c55e' : '#ef4444';
+        return (
+          <g key={p.nickname}>
+            <line x1={x} y1={y} x2={width - pad.right} y2={y} stroke={color} strokeWidth={0.5} strokeDasharray="2,2" opacity={0.4} />
+            <circle cx={x} cy={y} r={3} fill={color} />
+            <text x={x + 5} y={y - 3 - idx * 10} fill={color} fontSize={8} fontFamily="sans-serif" fontWeight="bold">
+              {isLong ? '▲' : '▼'} {p.nickname}
+            </text>
           </g>
         );
       })}
