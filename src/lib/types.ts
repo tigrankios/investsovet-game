@@ -36,8 +36,6 @@ export interface Candle {
 // --- Slot Machine ---
 export const SLOT_SYMBOLS = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'] as const;
 export type SlotSymbol = typeof SLOT_SYMBOLS[number];
-export const SLOT_TIMER_SEC = 15;
-
 export interface SlotResult {
   reels: [SlotSymbol, SlotSymbol, SlotSymbol];
   multiplier: number; // 0 = потерял, 1.5, 3, 5, 10
@@ -45,22 +43,75 @@ export interface SlotResult {
   winAmount: number; // может быть отрицательным (потеря ставки)
 }
 
+// --- Bonus Phase (rotating mini-games) ---
+export type BonusType = 'wheel' | 'slots' | 'lootbox';
+export const BONUS_TIMER_SEC = 15;
+
+export interface WheelSector {
+  multiplier: number;
+  label: string;
+  weight: number;
+}
+
+export const WHEEL_SECTORS: WheelSector[] = [
+  { multiplier: 0,    label: 'BUST',     weight: 3 },
+  { multiplier: 0.5,  label: 'x0.5',     weight: 2 },
+  { multiplier: 1.5,  label: 'x1.5',     weight: 3 },
+  { multiplier: 2,    label: 'x2',       weight: 3 },
+  { multiplier: 3,    label: 'x3',       weight: 2 },
+  { multiplier: 5,    label: 'x5',       weight: 2 },
+  { multiplier: 10,   label: 'x10',      weight: 0.8 },
+  { multiplier: 25,   label: 'x25 JACKPOT', weight: 0.2 },
+];
+
+export const LOOTBOX_POOL = [
+  { multiplier: 0,   weight: 3 },
+  { multiplier: 0.5, weight: 2 },
+  { multiplier: 1.5, weight: 3 },
+  { multiplier: 2,   weight: 3 },
+  { multiplier: 3,   weight: 2 },
+  { multiplier: 5,   weight: 1.5 },
+  { multiplier: 10,  weight: 0.8 },
+  { multiplier: 50,  weight: 0.2 },
+];
+
+export interface WheelResult {
+  sectorIndex: number;
+  multiplier: number;
+  bet: number;
+  winAmount: number;
+}
+
+export interface LootboxResult {
+  boxes: number[];
+  chosenIndex: number;
+  multiplier: number;
+  bet: number;
+  winAmount: number;
+}
+
+export type BonusResult =
+  | { type: 'slots'; result: SlotResult }
+  | { type: 'wheel'; result: WheelResult }
+  | { type: 'lootbox'; result: LootboxResult };
+
+export interface BonusState {
+  bonusType: BonusType;
+  played: Record<string, BonusResult>;
+  timer: number;
+}
+
 // --- Game State ---
 export type GamePhase =
   | 'lobby'
   | 'countdown'   // 3-2-1 перед стартом
   | 'trading'     // раунд идёт
-  | 'slots'       // слот-машина после раунда
+  | 'bonus'       // бонусная мини-игра после раунда
   | 'voting'      // голосование за следующую монету
   | 'finished';   // итоги
 
 export interface VoteState {
   votes: Record<string, boolean>; // playerId -> true=да, false=нет
-  timer: number;
-}
-
-export interface SlotState {
-  played: Record<string, SlotResult>; // playerId -> результат
   timer: number;
 }
 
@@ -76,7 +127,7 @@ export interface GameState {
   elapsed: number;             // сколько секунд прошло
   roundNumber: number;
   voteState: VoteState | null;
-  slotState: SlotState | null;
+  bonusState: BonusState | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -104,8 +155,8 @@ export interface ServerToClientEvents {
   playerUpdate: (player: ClientPlayerState) => void;
   liquidated: (data: { nickname: string; loss: number }) => void;
   voteUpdate: (data: { yes: number; no: number; total: number; timer: number }) => void;
-  slotResult: (result: SlotResult) => void;
-  slotUpdate: (data: { timer: number; results: { nickname: string; result: SlotResult }[] }) => void;
+  bonusResult: (result: BonusResult) => void;
+  bonusUpdate: (data: { timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] }) => void;
   error: (message: string) => void;
 }
 
@@ -116,6 +167,8 @@ export interface ClientToServerEvents {
   openPosition: (data: { direction: 'long' | 'short'; size: number; leverage: Leverage }) => void;
   closePosition: () => void;
   spinSlots: (data: { bet: number }) => void;
+  spinWheel: (data: { bet: number }) => void;
+  openLootbox: (data: { bet: number; chosenIndex: number }) => void;
   voteNextRound: (data: { vote: boolean }) => void;
 }
 
@@ -134,7 +187,8 @@ export interface ClientGameState {
   voteNo: number;
   voteTotal: number;
   voteTimer: number;
-  slotTimer: number;
+  bonusTimer: number;
+  bonusType: BonusType | null;
 }
 
 export interface ClientPlayerState {
