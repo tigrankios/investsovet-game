@@ -201,6 +201,7 @@ export interface GameState {
   roundNumber: number;
   voteState: VoteState | null;
   bonusState: BonusState | null;
+  lastAggressorId: string | null; // кто последний применил агрессивный скилл
 }
 
 // --- Leaderboard entry (для ТВ) ---

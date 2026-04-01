@@ -33,6 +33,7 @@ export async function createGame(): Promise<GameState> {
     roundNumber: 1,
     voteState: null,
     bonusState: null,
+    lastAggressorId: null,
   };
 }
 
@@ -112,6 +113,15 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
         if (player.balance < 0) player.balance = 0;
         player.pnl -= loss;
         liquidated.push({ nickname: player.nickname, loss });
+        // Бонус агрессору: 50% от суммы ликвидации
+        if (game.lastAggressorId && game.lastAggressorId !== player.id) {
+          const aggressor = game.players.find((p) => p.id === game.lastAggressorId);
+          if (aggressor && aggressor.connected) {
+            const bonus = Math.round(loss * 0.5 * 100) / 100;
+            aggressor.balance = Math.round((aggressor.balance + bonus) * 100) / 100;
+            aggressor.pnl = Math.round((aggressor.pnl + bonus) * 100) / 100;
+          }
+        }
         player.position = null;
       }
     }
@@ -310,6 +320,12 @@ export function useSkill(
 
   const skill = player.skill;
   player.skillUsed = true;
+
+  // Любой скилл, влияющий на других — запомнить агрессора для бонуса за ликвидации
+  const aggressiveSkills: SkillType[] = ['inverse', 'chaos', 'blind'];
+  if (aggressiveSkills.includes(skill)) {
+    game.lastAggressorId = playerId;
+  }
 
   switch (skill) {
     case 'trump_tweet':
@@ -682,6 +698,7 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.roundNumber++;
   game.voteState = null;
   game.bonusState = null;
+  game.lastAggressorId = null;
 
   // Сброс PnL и скиллов (баланс сохраняется между раундами)
   for (const player of game.players) {
