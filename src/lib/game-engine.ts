@@ -53,6 +53,11 @@ export function addPlayer(game: GameState, id: string, nickname: string): Player
     freezePrice: null,
     freezeTicksLeft: 0,
     blindTicksLeft: 0,
+    maxBalance: INITIAL_BALANCE,
+    worstTrade: 0,
+    bestTrade: 0,
+    totalTrades: 0,
+    liquidations: 0,
   };
   game.players.push(player);
   return player;
@@ -114,6 +119,10 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
         if (player.balance < 0) player.balance = 0;
         player.pnl -= loss;
         liquidated.push({ nickname: player.nickname, loss });
+        // Статистика ликвидации
+        player.liquidations++;
+        player.totalTrades++;
+        if (-loss < player.worstTrade) player.worstTrade = -loss;
         // Бонус агрессору: 50% от суммы ликвидации
         if (game.lastAggressorId && game.lastAggressorId !== player.id) {
           const aggressor = game.players.find((p) => p.id === game.lastAggressorId);
@@ -214,6 +223,12 @@ export function closePosition(
   player.pnl += pnl;
   if (player.balance < 0) player.balance = 0;
 
+  // Обновить статистику
+  player.totalTrades++;
+  if (pnl < player.worstTrade) player.worstTrade = pnl;
+  if (pnl > player.bestTrade) player.bestTrade = pnl;
+  if (player.balance > player.maxBalance) player.maxBalance = player.balance;
+
   // Сбросить одноразовые эффекты после закрытия позиции
   player.pnlMultiplier = 1;
   player.freezePrice = null;
@@ -275,6 +290,11 @@ export function endRound(game: GameState): RoundResult {
       player.balance += pnl;
       player.pnl += pnl;
       if (player.balance < 0) player.balance = 0;
+      // Статистика
+      player.totalTrades++;
+      if (pnl < player.worstTrade) player.worstTrade = pnl;
+      if (pnl > player.bestTrade) player.bestTrade = pnl;
+      if (player.balance > player.maxBalance) player.maxBalance = player.balance;
       player.position = null;
     }
   }
@@ -289,6 +309,24 @@ export function endRound(game: GameState): RoundResult {
     winner: { nickname: winner.nickname, totalPnl: winner.totalPnl },
     roundNumber: game.roundNumber,
   };
+}
+
+// --- Финальная статистика ---
+
+export function getFinalStats(game: GameState): import('./types').FinalPlayerStats[] {
+  return game.players
+    .filter((p) => p.connected)
+    .sort((a, b) => b.balance - a.balance)
+    .map((p, i) => ({
+      nickname: p.nickname,
+      rank: i + 1,
+      balance: Math.round(p.balance * 100) / 100,
+      maxBalance: Math.round(p.maxBalance * 100) / 100,
+      worstTrade: Math.round(p.worstTrade * 100) / 100,
+      bestTrade: Math.round(p.bestTrade * 100) / 100,
+      totalTrades: p.totalTrades,
+      liquidations: p.liquidations,
+    }));
 }
 
 // --- Скиллы ---

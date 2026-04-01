@@ -28,7 +28,7 @@ function PlayContent() {
   const {
     gameState, playerState, countdown, roundResult, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert,
+    bonusResult, bonusData, skillAlert, finalStats,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   } = useGame();
 
@@ -697,20 +697,48 @@ function PlayContent() {
 
   // --- FINISHED ---
   if (gameState.phase === 'finished') {
+    const medals = ['🏆', '🥈', '🥉'];
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
-        <div className="text-6xl mb-4">🏁</div>
-        <h2 className="text-3xl font-black text-yellow-400">ИГРА ОКОНЧЕНА</h2>
-        {playerState && (
-          <p className="text-2xl font-bold mt-4">${playerState.balance.toFixed(0)}</p>
+      <div className="min-h-screen bg-black text-white flex flex-col items-center p-4 overflow-y-auto">
+        <div className="text-5xl mt-6 mb-2">🏁</div>
+        <h2 className="text-2xl font-black text-yellow-400 mb-4">ИГРА ОКОНЧЕНА</h2>
+
+        {finalStats.length > 0 ? (
+          <div className="w-full max-w-md space-y-3 mb-6">
+            {finalStats.map((s) => (
+              <div key={s.nickname} className={`rounded-xl p-4 ${s.rank === 1 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-gray-900/50 border border-gray-800'}`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xl font-bold">
+                    {s.rank <= 3 ? medals[s.rank - 1] : `${s.rank}.`} {s.nickname}
+                  </span>
+                  <span className="text-xl font-mono font-bold text-yellow-400">${s.balance.toFixed(0)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <span className="text-gray-400">Макс. баланс</span>
+                  <span className="text-right font-mono text-green-400">${s.maxBalance.toFixed(0)}</span>
+                  <span className="text-gray-400">Лучшая сделка</span>
+                  <span className="text-right font-mono text-green-400">+${s.bestTrade.toFixed(0)}</span>
+                  <span className="text-gray-400">Худшая сделка</span>
+                  <span className="text-right font-mono text-red-400">{s.worstTrade.toFixed(0)}$</span>
+                  <span className="text-gray-400">Сделок</span>
+                  <span className="text-right font-mono">{s.totalTrades}</span>
+                  <span className="text-gray-400">Ликвидаций</span>
+                  <span className="text-right font-mono text-red-400">{s.liquidations}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : playerState && (
+          <p className="text-2xl font-bold mt-4 mb-6">${playerState.balance.toFixed(0)}</p>
         )}
+
         <button
           onClick={() => {
             sessionStorage.removeItem('investsovet_room');
             sessionStorage.removeItem('investsovet_nick');
             window.location.href = '/play';
           }}
-          className="mt-8 bg-gray-800 text-white px-8 py-3 rounded-xl text-lg active:scale-95"
+          className="bg-gray-800 text-white px-8 py-3 rounded-xl text-lg active:scale-95"
         >
           Новая игра
         </button>

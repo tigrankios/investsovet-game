@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
-  RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType,
+  RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType, FinalPlayerStats,
 } from './types';
 
 export function useGame() {
@@ -22,6 +22,7 @@ export function useGame() {
   const [bonusResult, setBonusResult] = useState<BonusResult | null>(null);
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
   const [skillAlert, setSkillAlert] = useState('');
+  const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export function useGame() {
 
     socket.on('voteUpdate', (data) => setVoteData(data));
 
+    socket.on('gameFinished', (stats) => setFinalStats(stats));
     socket.on('bonusResult', (result) => setBonusResult(result));
     socket.on('bonusUpdate', (data) => setBonusData(data));
 
@@ -98,6 +100,7 @@ export function useGame() {
       socket.off('voteUpdate');
       socket.off('bonusResult');
       socket.off('bonusUpdate');
+      socket.off('gameFinished');
       socket.off('skillAssigned');
       socket.off('skillUsed');
       socket.off('error');
@@ -147,7 +150,7 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert,
+    bonusResult, bonusData, skillAlert, finalStats,
     createRoom, joinRoom, startGame, openPosition, closePosition, usePlayerSkill,
     spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };

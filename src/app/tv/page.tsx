@@ -11,7 +11,7 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    voteData, liquidationAlert, bonusData,
+    voteData, liquidationAlert, bonusData, finalStats,
     createRoom, startGame,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -276,25 +276,41 @@ export default function TVPage() {
 
   // --- FINISHED ---
   if (phase === 'finished') {
-    return (
-      <div className="h-screen bg-black text-white flex flex-col items-center justify-center">
-        <h1 className="text-6xl font-black text-yellow-400 mb-8">ИГРА ОКОНЧЕНА</h1>
+    const stats = finalStats.length > 0 ? finalStats : leaderboard.map((e, i) => ({
+      nickname: e.nickname, rank: i + 1, balance: e.balance,
+      maxBalance: e.balance, worstTrade: 0, bestTrade: 0, totalTrades: 0, liquidations: 0,
+    }));
+    const medals = ['🏆', '🥈', '🥉'];
 
-        <div className="w-full max-w-2xl">
-          <table className="w-full text-left text-xl">
+    return (
+      <div className="h-screen bg-black text-white flex flex-col items-center justify-center overflow-y-auto">
+        <h1 className="text-6xl font-black text-yellow-400 mb-6 mt-8">ИГРА ОКОНЧЕНА</h1>
+
+        <div className="w-full max-w-3xl px-4">
+          <table className="w-full text-left">
             <thead>
-              <tr className="text-gray-500">
+              <tr className="text-gray-500 text-sm">
                 <th className="pb-3">#</th>
                 <th className="pb-3">Игрок</th>
                 <th className="pb-3 text-right">Баланс</th>
+                <th className="pb-3 text-right">Макс.</th>
+                <th className="pb-3 text-right">Лучшая</th>
+                <th className="pb-3 text-right">Худшая</th>
+                <th className="pb-3 text-right">Сделки</th>
+                <th className="pb-3 text-right">Ликв.</th>
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((entry, i) => (
-                <tr key={entry.nickname} className={`border-t border-gray-800 ${i === 0 ? 'text-yellow-400 text-2xl' : ''}`}>
-                  <td className="py-4 font-bold">{i === 0 ? '🏆' : i + 1}</td>
-                  <td className="py-4 font-bold">{entry.nickname}</td>
-                  <td className="py-4 text-right font-mono font-bold">${entry.balance.toFixed(0)}</td>
+              {stats.map((s) => (
+                <tr key={s.nickname} className={`border-t border-gray-800 ${s.rank === 1 ? 'text-yellow-400 text-xl' : 'text-lg'}`}>
+                  <td className="py-4 font-bold">{s.rank <= 3 ? medals[s.rank - 1] : s.rank}</td>
+                  <td className="py-4 font-bold">{s.nickname}</td>
+                  <td className="py-4 text-right font-mono font-bold">${s.balance.toFixed(0)}</td>
+                  <td className="py-4 text-right font-mono text-green-400">${s.maxBalance.toFixed(0)}</td>
+                  <td className="py-4 text-right font-mono text-green-400">+{s.bestTrade.toFixed(0)}</td>
+                  <td className="py-4 text-right font-mono text-red-400">{s.worstTrade.toFixed(0)}</td>
+                  <td className="py-4 text-right font-mono">{s.totalTrades}</td>
+                  <td className="py-4 text-right font-mono text-red-400">{s.liquidations}</td>
                 </tr>
               ))}
             </tbody>

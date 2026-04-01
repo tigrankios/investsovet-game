@@ -60,6 +60,12 @@ export interface Player {
   freezePrice: number | null;    // замороженная цена (null = не активна)
   freezeTicksLeft: number;       // сколько тиков осталось заморозки
   blindTicksLeft: number;        // сколько тиков слепого трейда осталось
+  // Статистика за всю игру
+  maxBalance: number;            // максимальный баланс за игру
+  worstTrade: number;            // наибольший убыток за одну сделку (отрицательное число)
+  totalTrades: number;           // количество сделок
+  liquidations: number;          // количество ликвидаций
+  bestTrade: number;             // лучшая сделка (максимальный профит)
 }
 
 // --- Position ---
@@ -217,6 +223,17 @@ export interface LeaderboardEntry {
   positionLeverage: Leverage | null;
 }
 
+export interface FinalPlayerStats {
+  nickname: string;
+  rank: number;
+  balance: number;
+  maxBalance: number;
+  worstTrade: number;
+  bestTrade: number;
+  totalTrades: number;
+  liquidations: number;
+}
+
 // --- Socket Events ---
 export interface ServerToClientEvents {
   gameState: (state: ClientGameState) => void;
@@ -229,6 +246,7 @@ export interface ServerToClientEvents {
   tradeResult: (data: { success: boolean; message: string }) => void;
   playerUpdate: (player: ClientPlayerState) => void;
   liquidated: (data: { nickname: string; loss: number }) => void;
+  gameFinished: (stats: FinalPlayerStats[]) => void;
   skillAssigned: (skill: SkillType) => void;
   skillUsed: (data: { nickname: string; skill: SkillType }) => void;
   inversed: (data: { nickname: string; ticksLeft: number }) => void;

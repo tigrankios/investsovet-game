@@ -7,7 +7,7 @@ import {
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
   startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
-  assignRandomSkill, useSkill,
+  assignRandomSkill, useSkill, getFinalStats,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -183,6 +183,7 @@ function startBonusPhase(io: SocketServer, game: GameState) {
           game.phase = 'finished';
           broadcastState(io, game);
           broadcastLeaderboard(io, game);
+          io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
         } else {
           await setupNextRound(game);
           broadcastState(io, game);
