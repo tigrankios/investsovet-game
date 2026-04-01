@@ -4,7 +4,7 @@ import {
   SlotResult, SlotSymbol, SLOT_SYMBOLS,
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
-  SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION,
+  SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION, BLIND_DURATION,
   INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
@@ -50,6 +50,7 @@ export function addPlayer(game: GameState, id: string, nickname: string): Player
     shieldActive: false,
     freezePrice: null,
     freezeTicksLeft: 0,
+    blindTicksLeft: 0,
   };
   game.players.push(player);
   return player;
@@ -77,13 +78,16 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
     game.currentPrice = game.candles[game.visibleCandleCount - 1].close;
   }
 
-  // Обновить freeze таймеры
+  // Обновить таймеры эффектов
   for (const player of game.players) {
     if (player.freezeTicksLeft > 0) {
       player.freezeTicksLeft--;
       if (player.freezeTicksLeft <= 0) {
         player.freezePrice = null;
       }
+    }
+    if (player.blindTicksLeft > 0) {
+      player.blindTicksLeft--;
     }
   }
 
@@ -291,6 +295,7 @@ function resetPlayerSkillEffects(player: Player): void {
   player.shieldActive = false;
   player.freezePrice = null;
   player.freezeTicksLeft = 0;
+  player.blindTicksLeft = 0;
 }
 
 export function useSkill(
@@ -351,6 +356,39 @@ export function useSkill(
       player.freezePrice = game.currentPrice;
       player.freezeTicksLeft = FREEZE_DURATION;
       return { success: true, message: '🧊 ЗАМОРОЗКА! Цена зафиксирована на 5 свечей', skill };
+
+    case 'blind':
+      // Слепой трейд — скрыть график у ВСЕХ на 15 секунд
+      for (const p of game.players) {
+        if (p.connected) p.blindTicksLeft = BLIND_DURATION;
+      }
+      return { success: true, message: '🙈 СЛЕПОЙ ТРЕЙД! График скрыт у всех!', skill, affectsAll: true };
+
+    case 'steal': {
+      // Кража — украсть 10% баланса случайного другого игрока
+      const others = game.players.filter((p) => p.connected && p.id !== playerId && p.balance > 0);
+      if (others.length === 0) {
+        return { success: true, message: '🦹 КРАЖА! Не у кого красть...', skill };
+      }
+      const victim = others[Math.floor(Math.random() * others.length)];
+      const stolen = Math.round(victim.balance * 0.1 * 100) / 100;
+      victim.balance = Math.round((victim.balance - stolen) * 100) / 100;
+      player.balance = Math.round((player.balance + stolen) * 100) / 100;
+      return { success: true, message: `🦹 КРАЖА! Украл $${stolen.toFixed(0)} у ${victim.nickname}!`, skill, affectsAll: true };
+    }
+
+    case 'chaos':
+      // Хаос — поменять направление ВСЕХ открытых позиций (long↔short)
+      for (const p of game.players) {
+        if (p.position && p.connected) {
+          p.position.direction = p.position.direction === 'long' ? 'short' : 'long';
+          // Пересчитать цену ликвидации
+          p.position.liquidationPrice = calcLiquidationPrice(
+            p.position.direction, p.position.entryPrice, p.position.leverage
+          );
+        }
+      }
+      return { success: true, message: '🌪️ ХАОС! Все позиции перевернулись!', skill, affectsAll: true };
 
     default:
       return { success: false, message: 'Неизвестный скилл' };

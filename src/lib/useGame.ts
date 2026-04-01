@@ -73,6 +73,9 @@ export function useGame() {
         shield: '🛡️ ЩИТ',
         double_or_nothing: '💰 ВА-БАНК',
         freeze: '🧊 ЗАМОРОЗКА',
+        blind: '🙈 СЛЕПОЙ ТРЕЙД',
+        steal: '🦹 КРАЖА',
+        chaos: '🌪️ ХАОС',
       };
       setSkillAlert(`${nickname}: ${names[skill] || skill}!`);
       setTimeout(() => setSkillAlert(''), 3000);

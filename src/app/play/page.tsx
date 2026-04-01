@@ -178,9 +178,18 @@ function PlayContent() {
     const unrealizedPnl = playerState.unrealizedPnl;
     const totalBalance = balance + (unrealizedPnl || 0);
     const tradeSize = Math.floor(balance * sizePercent / 100);
+    const isBlind = playerState.blindTicksLeft > 0;
 
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
+        {/* Blind overlay */}
+        {isBlind && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 pointer-events-none">
+            <div className="text-8xl mb-4">🙈</div>
+            <p className="text-3xl font-black text-yellow-400 animate-pulse">СЛЕПОЙ ТРЕЙД</p>
+            <p className="text-xl text-gray-400 mt-2">{playerState.blindTicksLeft}с</p>
+          </div>
+        )}
         {/* Toast */}
         {tradeMessage && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm z-50">
@@ -257,6 +266,7 @@ function PlayContent() {
             <span className="text-gray-500 text-sm">{SKILL_EMOJIS[playerState.skill]} {SKILL_NAMES[playerState.skill]} — использован</span>
             {playerState.shieldActive && <span className="text-yellow-400 text-sm ml-2">🛡️ Щит активен</span>}
             {playerState.freezeTicksLeft > 0 && <span className="text-cyan-400 text-sm ml-2">🧊 Заморозка: {playerState.freezeTicksLeft}</span>}
+            {playerState.blindTicksLeft > 0 && <span className="text-purple-400 text-sm ml-2">🙈 Слепой: {playerState.blindTicksLeft}</span>}
           </div>
         )}
 

@@ -3,7 +3,7 @@
 // ============================================
 
 // --- Skills (Mario Kart style) ---
-export type SkillType = 'trump_tweet' | 'inverse' | 'shield' | 'double_or_nothing' | 'freeze';
+export type SkillType = 'trump_tweet' | 'inverse' | 'shield' | 'double_or_nothing' | 'freeze' | 'blind' | 'steal' | 'chaos';
 
 export const SKILL_NAMES: Record<SkillType, string> = {
   trump_tweet: 'Твит Трампа',
@@ -11,6 +11,9 @@ export const SKILL_NAMES: Record<SkillType, string> = {
   shield: 'Щит',
   double_or_nothing: 'Ва-банк',
   freeze: 'Заморозка',
+  blind: 'Слепой трейд',
+  steal: 'Кража',
+  chaos: 'Хаос',
 };
 
 export const SKILL_EMOJIS: Record<SkillType, string> = {
@@ -19,6 +22,9 @@ export const SKILL_EMOJIS: Record<SkillType, string> = {
   shield: '🛡️',
   double_or_nothing: '💰',
   freeze: '🧊',
+  blind: '🙈',
+  steal: '🦹',
+  chaos: '🌪️',
 };
 
 export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
@@ -27,12 +33,16 @@ export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
   shield: 'Защита от ликвидации (1 раз)',
   double_or_nothing: 'Удваивает маржу позиции',
   freeze: 'Фиксирует цену на 5 свечей',
+  blind: 'Скрывает график у ВСЕХ на 15 сек',
+  steal: 'Крадёт 10% баланса случайного игрока',
+  chaos: 'Меняет long/short у ВСЕХ открытых позиций',
 };
 
-export const ALL_SKILLS: SkillType[] = ['trump_tweet', 'inverse', 'shield', 'double_or_nothing', 'freeze'];
+export const ALL_SKILLS: SkillType[] = ['trump_tweet', 'inverse', 'shield', 'double_or_nothing', 'freeze', 'blind', 'steal', 'chaos'];
 
 export const FREEZE_DURATION = 5;
 export const INVERSE_DURATION = 10;
+export const BLIND_DURATION = 15;
 
 // --- Players ---
 export interface Player {
@@ -49,6 +59,7 @@ export interface Player {
   shieldActive: boolean;         // защита от ликвидации
   freezePrice: number | null;    // замороженная цена (null = не активна)
   freezeTicksLeft: number;       // сколько тиков осталось заморозки
+  blindTicksLeft: number;        // сколько тиков слепого трейда осталось
 }
 
 // --- Position ---
@@ -267,6 +278,7 @@ export interface ClientPlayerState {
   skillUsed: boolean;
   shieldActive: boolean;
   freezeTicksLeft: number;
+  blindTicksLeft: number;
 }
 
 // --- Round Result ---

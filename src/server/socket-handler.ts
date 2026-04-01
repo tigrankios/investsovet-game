@@ -58,6 +58,7 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
     skillUsed: player.skillUsed,
     shieldActive: player.shieldActive,
     freezeTicksLeft: player.freezeTicksLeft,
+    blindTicksLeft: player.blindTicksLeft,
   });
 }
 
