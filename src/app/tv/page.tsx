@@ -11,7 +11,7 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    voteData, liquidationAlert, slotData,
+    voteData, liquidationAlert, bonusData,
     createRoom, startGame,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -158,36 +158,62 @@ export default function TVPage() {
     );
   }
 
-  // --- SLOTS ---
-  if (phase === 'slots') {
-    const timer = slotData?.timer || gameState.slotTimer;
-    const slotResults = slotData?.results || [];
+  // --- BONUS ---
+  if (phase === 'bonus') {
+    const timer = bonusData?.timer || gameState.bonusTimer;
+    const bonusType = bonusData?.bonusType || gameState.bonusType;
+    const bonusResults = bonusData?.results || [];
+
+    const BONUS_TITLES: Record<string, string> = {
+      wheel: 'КОЛЕСО ФОРТУНЫ',
+      slots: 'СЛОТ-МАШИНА',
+      lootbox: 'ЛУТБОКС',
+    };
+
+    const BONUS_EMOJIS: Record<string, string> = {
+      wheel: '🎡',
+      slots: '🎰',
+      lootbox: '🎁',
+    };
 
     return (
       <div className="h-screen bg-black text-white flex flex-col items-center justify-center">
-        <h1 className="text-6xl font-black text-yellow-400 mb-2">СЛОТ-МАШИНА</h1>
-        <p className="text-gray-400 text-xl mb-8">Игроки крутят барабаны...</p>
+        <div className="text-6xl mb-2">{BONUS_EMOJIS[bonusType || 'slots']}</div>
+        <h1 className="text-6xl font-black text-yellow-400 mb-2">{BONUS_TITLES[bonusType || 'slots']}</h1>
+        <p className="text-gray-400 text-xl mb-4">
+          {bonusType === 'wheel' ? 'Игроки крутят колесо...' : bonusType === 'lootbox' ? 'Игроки выбирают коробки...' : 'Игроки крутят барабаны...'}
+        </p>
         <p className="text-yellow-400 text-4xl font-mono font-bold mb-8">{timer}с</p>
 
-        {slotResults.length > 0 && (
+        {bonusResults.length > 0 && (
           <div className="w-full max-w-2xl space-y-3">
-            {slotResults.map(({ nickname, result }) => (
-              <div key={nickname} className="flex items-center justify-between bg-gray-900/50 rounded-xl px-6 py-4">
-                <span className="text-xl font-bold">{nickname}</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-3xl">{result.reels.join(' ')}</span>
-                  <span className={`text-xl font-mono font-bold ${result.winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {result.multiplier > 0 ? `x${result.multiplier}` : 'MISS'}
-                    {' '}
-                    {result.winAmount >= 0 ? '+' : ''}{result.winAmount.toFixed(0)}$
-                  </span>
+            {bonusResults.map(({ nickname, result }) => {
+              const { winAmount, multiplier } = result.result;
+              let detail = '';
+              if (result.type === 'slots') {
+                detail = result.result.reels.join(' ');
+              } else if (result.type === 'wheel') {
+                detail = `Сектор: ${multiplier > 0 ? `x${multiplier}` : 'BUST'}`;
+              } else if (result.type === 'lootbox') {
+                detail = `Коробка ${result.result.chosenIndex + 1}: ${multiplier > 0 ? `x${multiplier}` : 'BUST'}`;
+              }
+
+              return (
+                <div key={nickname} className="flex items-center justify-between bg-gray-900/50 rounded-xl px-6 py-4">
+                  <span className="text-xl font-bold">{nickname}</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xl text-gray-300">{detail}</span>
+                    <span className={`text-xl font-mono font-bold ${winAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {winAmount >= 0 ? '+' : ''}{winAmount.toFixed(0)}$
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {slotResults.length === 0 && (
+        {bonusResults.length === 0 && (
           <p className="text-gray-600 text-2xl animate-pulse">Ждём ставки...</p>
         )}
       </div>
