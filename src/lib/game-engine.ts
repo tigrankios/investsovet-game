@@ -377,18 +377,18 @@ function generateLootboxValues(): number[] {
   }
 
   // Гарантируем минимум 1 бокс >= x2
+  let highFixedIdx = -1;
   if (!boxes.some((m) => m >= 2)) {
-    const replaceIdx = Math.floor(Math.random() * 4);
+    highFixedIdx = Math.floor(Math.random() * 4);
     const highPool = LOOTBOX_POOL.filter((p) => p.multiplier >= 2);
     const highIdx = weightedRandomIndex(highPool.map((p) => p.weight));
-    boxes[replaceIdx] = highPool[highIdx].multiplier;
+    boxes[highFixedIdx] = highPool[highIdx].multiplier;
   }
 
-  // Гарантируем минимум 1 бокс <= x1.5
+  // Гарантируем минимум 1 бокс <= x1.5 (не трогая индекс, зафиксированный выше)
   if (!boxes.some((m) => m <= 1.5)) {
-    // Выбираем случайный индекс, который не тот же что заменили выше
-    let replaceIdx = Math.floor(Math.random() * 4);
-    // Если все боксы >= 2, просто заменяем любой другой
+    const candidates = [0, 1, 2, 3].filter((i) => i !== highFixedIdx);
+    const replaceIdx = candidates[Math.floor(Math.random() * candidates.length)];
     const lowPool = LOOTBOX_POOL.filter((p) => p.multiplier <= 1.5);
     const lowIdx = weightedRandomIndex(lowPool.map((p) => p.weight));
     boxes[replaceIdx] = lowPool[lowIdx].multiplier;
@@ -417,7 +417,7 @@ export function openLootbox(
   if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
   if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
   if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
-  if (chosenIndex < 0 || chosenIndex > 3) return { success: false, message: 'Некорректный выбор' };
+  if (!Number.isInteger(chosenIndex) || chosenIndex < 0 || chosenIndex > 3) return { success: false, message: 'Некорректный выбор' };
 
   const boxes = generateLootboxValues();
   const multiplier = boxes[chosenIndex];

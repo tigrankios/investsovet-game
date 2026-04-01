@@ -32,6 +32,7 @@ export function useGame() {
       setCandles([...state.visibleCandles]);
       setCurrentPrice(state.currentPrice);
       if (state.phase !== 'voting') setVoteData(null);
+      if (state.phase !== 'bonus') { setBonusResult(null); setBonusData(null); }
     });
 
     socket.on('playerUpdate', (state) => setPlayerState(state));
