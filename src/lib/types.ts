@@ -63,7 +63,7 @@ export interface Player {
 }
 
 // --- Position ---
-export type Leverage = 1 | 5 | 10 | 25 | 50 | 100 | 200 | 500;
+export type Leverage = 25 | 50 | 100 | 200 | 500;
 
 export interface Position {
   direction: 'long' | 'short';
@@ -299,4 +299,4 @@ export const MIN_ROUND_DURATION = 30;
 export const MAX_ROUND_DURATION = 120;
 export const CANDLE_INTERVAL_MS = 1000;
 export const VOTE_TIMER_SEC = 15;
-export const AVAILABLE_LEVERAGES: Leverage[] = [1, 5, 10, 25, 50, 100, 200, 500];
+export const AVAILABLE_LEVERAGES: Leverage[] = [25, 50, 100, 200, 500];

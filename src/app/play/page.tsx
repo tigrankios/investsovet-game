@@ -37,7 +37,7 @@ function PlayContent() {
   const [nickname, setNickname] = useState('');
   const [roomCode, setRoomCode] = useState(roomFromUrl);
   const [sizePercent, setSizePercent] = useState(25);
-  const [leverage, setLeverage] = useState<Leverage>(5);
+  const [leverage, setLeverage] = useState<Leverage>(25);
   const [hasVoted, setHasVoted] = useState(false);
   const [bonusBetPercent, setBonusBetPercent] = useState(10);
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -310,7 +310,7 @@ function PlayContent() {
                           : 'bg-gray-900 text-gray-400 border border-gray-800'
                       }`}
                     >
-                      {lev === 1 ? '1x' : `${lev}x`}
+                      {`${lev}x`}
                     </button>
                   ))}
                 </div>
