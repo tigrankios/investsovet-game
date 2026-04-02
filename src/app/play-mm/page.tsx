@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
-import { BONUS_TITLES } from '@/lib/types';
+import { BONUS_TITLES, MAX_POSITION_PERCENT } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
 import { IconLong, IconShort, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, BONUS_ICON_MAP } from '@/components/icons';
@@ -471,14 +471,14 @@ function PlayMMContent() {
                 </div>
               </div>
 
-              {/* Size */}
+              {/* Size (MM mode: max 30%) */}
               <div>
                 <div className="flex justify-between text-sm text-text-secondary mb-1">
                   <span>Маржа: ${tradeSize.toLocaleString()}</span>
-                  <span>Позиция: ${(tradeSize * leverage).toLocaleString()}</span>
+                  <span className="text-accent-gold">Макс: {MAX_POSITION_PERCENT}%</span>
                 </div>
                 <div className="flex gap-1.5">
-                  {[10, 25, 50, 75, 100].map((pct) => (
+                  {[5, 10, 15, 20, MAX_POSITION_PERCENT].map((pct) => (
                     <button
                       key={pct}
                       onClick={() => setSizePercent(pct)}

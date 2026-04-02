@@ -134,3 +134,21 @@ body::before {
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }
+
+/* Binary Options animations */
+@keyframes resultScaleIn {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes fadeGlow {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+@keyframes glow-pulse-red {
+  0%, 100% { box-shadow: 0 0 8px var(--accent-red), 0 0 24px rgba(255, 23, 68, 0.15); }
+  50% { box-shadow: 0 0 16px var(--accent-red), 0 0 48px rgba(255, 23, 68, 0.3); }
+}
