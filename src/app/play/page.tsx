@@ -144,7 +144,7 @@ function PlayContent() {
               setJoined(true);
             }}
             disabled={!roomCode || !nickname}
-            className="w-full bg-accent-green text-black font-display font-bold text-xl py-4 rounded-xl disabled:opacity-30 active:scale-95 transition-all glow-green"
+            className="w-full bg-accent-green text-white font-display font-bold text-xl py-4 rounded-xl disabled:opacity-30 active:scale-95 transition-all glow-green"
           >
             ВОЙТИ
           </button>
@@ -340,7 +340,7 @@ function PlayContent() {
             <button
               onClick={closePosition}
               className={`w-full py-5 rounded-xl font-display font-bold text-xl active:scale-95 transition-all ${
-                unrealizedPnl >= 0 ? 'bg-accent-green text-black' : 'bg-accent-red text-white'
+                unrealizedPnl >= 0 ? 'bg-accent-green text-white glow-green' : 'bg-accent-red text-white glow-red'
               }`}
             >
               ЗАКРЫТЬ {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(2)}$
@@ -395,7 +395,7 @@ function PlayContent() {
                 <button
                   onClick={() => openPosition('long', tradeSize, leverage)}
                   disabled={tradeSize <= 0}
-                  className="bg-accent-green text-black font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-green"
+                  className="bg-accent-green text-white font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-green"
                 >
                   <span className="flex items-center justify-center gap-1"><IconLong size={16} /> LONG</span>
                 </button>
@@ -585,7 +585,7 @@ function PlayContent() {
                     className={`h-12 rounded-lg font-bold text-lg transition-all active:scale-95 ${
                       hasPlayed
                         ? isMatch
-                          ? 'bg-accent-green text-black ring-2 ring-accent-green scale-110'
+                          ? 'bg-accent-green text-white ring-2 ring-accent-green scale-110'
                           : isDrawn
                             ? 'bg-accent-gold text-black'
                             : isPlayerOnly
@@ -723,7 +723,7 @@ function PlayContent() {
           <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
             <button
               onClick={() => { voteNextRound(true); setHasVoted(true); }}
-              className="bg-accent-green text-black font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
+              className="bg-accent-green text-white font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
             >
               ДА
             </button>

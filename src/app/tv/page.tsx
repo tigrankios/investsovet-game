@@ -141,7 +141,7 @@ export default function TVPage() {
           {playerNames.length >= 1 ? (
             <button
               onClick={startGame}
-              className="bg-accent-green text-black font-display font-bold text-2xl px-12 py-4 rounded-xl hover:bg-accent-green/90 transition-all hover:scale-105 active:scale-95 glow-green animate-glow-pulse"
+              className="bg-accent-green text-white font-display font-bold text-2xl px-12 py-4 rounded-xl hover:bg-accent-green/90 transition-all hover:scale-105 active:scale-95 glow-green animate-glow-pulse"
             >
               СТАРТ
             </button>
