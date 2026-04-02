@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
-import { SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS, BONUS_TITLES, MEDAL_EMOJIS } from '@/lib/types';
+import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
+import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillFreeze, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
 
 const RANDOM_NICKS = [
   'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
@@ -221,7 +222,7 @@ function PlayContent() {
         <div className="px-4 pt-4 pb-2">
           {isBlind ? (
             <div className="flex flex-col items-center py-4">
-              <div className="text-5xl mb-2">🙈</div>
+              <div className="mb-2"><IconSkillBlind size={40} /></div>
               <p className="text-xl font-display font-black text-accent-gold animate-pulse">СЛЕПОЙ ТРЕЙД</p>
               <p className="text-text-secondary mt-1">{playerState.blindTicksLeft}с</p>
             </div>
@@ -306,7 +307,7 @@ function PlayContent() {
         {/* Trader: MM indicator */}
         {playerState.role === 'trader' && gameState.gameMode === 'market_maker' && gameState.marketMakerNickname && (
           <div className="mx-4 mt-2 text-center">
-            <span className="text-accent-gold/70 text-xs">⚔️ vs Маркет-Мейкер: {gameState.marketMakerNickname}</span>
+            <span className="text-accent-gold/70 text-xs">vs Маркет-Мейкер: {gameState.marketMakerNickname}</span>
           </div>
         )}
 
@@ -317,17 +318,17 @@ function PlayContent() {
               onClick={usePlayerSkill}
               className="w-full py-3 rounded-xl font-display font-bold text-lg active:scale-95 transition-all bg-gradient-to-r from-purple-600 to-pink-600 text-white animate-glow-pulse glow-purple"
             >
-              {SKILL_EMOJIS[playerState.skill]} {SKILL_NAMES[playerState.skill]}
+              <span className="flex items-center justify-center gap-1">{SKILL_ICON_MAP[playerState.skill]?.({ size: 20 })} {SKILL_NAMES[playerState.skill]}</span>
               <span className="block text-xs font-normal opacity-80">{SKILL_DESCRIPTIONS[playerState.skill]}</span>
             </button>
           </div>
         )}
         {playerState.role !== 'market_maker' && playerState.skill && playerState.skillUsed && (
           <div className="mx-4 mt-2 text-center">
-            <span className="text-text-secondary text-sm">{SKILL_EMOJIS[playerState.skill]} {SKILL_NAMES[playerState.skill]} — использован</span>
-            {playerState.shieldActive && <span className="text-accent-gold text-sm ml-2">🛡️ Щит активен</span>}
-            {playerState.freezeTicksLeft > 0 && <span className="text-accent-blue text-sm ml-2">🧊 Заморозка: {playerState.freezeTicksLeft}</span>}
-            {playerState.blindTicksLeft > 0 && <span className="text-accent-purple text-sm ml-2">🙈 Слепой: {playerState.blindTicksLeft}</span>}
+            <span className="inline-flex items-center gap-1 text-text-secondary text-sm">{SKILL_ICON_MAP[playerState.skill]?.({ size: 14 })} {SKILL_NAMES[playerState.skill]} — использован</span>
+            {playerState.shieldActive && <span className="inline-flex items-center gap-1 text-accent-gold text-sm ml-2"><IconSkillShield size={14} /> Щит активен</span>}
+            {playerState.freezeTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-blue text-sm ml-2"><IconSkillFreeze size={14} /> Заморозка: {playerState.freezeTicksLeft}</span>}
+            {playerState.blindTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-purple text-sm ml-2"><IconSkillBlind size={14} /> Слепой: {playerState.blindTicksLeft}</span>}
           </div>
         )}
 
@@ -396,14 +397,14 @@ function PlayContent() {
                   disabled={tradeSize <= 0}
                   className="bg-accent-green text-black font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-green"
                 >
-                  📈 LONG
+                  <span className="flex items-center justify-center gap-1"><IconLong size={16} /> LONG</span>
                 </button>
                 <button
                   onClick={() => openPosition('short', tradeSize, leverage)}
                   disabled={tradeSize <= 0}
                   className="bg-accent-red text-white font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-red"
                 >
-                  📉 SHORT
+                  <span className="flex items-center justify-center gap-1"><IconShort size={16} /> SHORT</span>
                 </button>
               </div>
             </>
@@ -420,7 +421,7 @@ function PlayContent() {
     const timer = bonusData?.timer || gameState.bonusTimer;
     const bonusType = bonusData?.bonusType || gameState.bonusType;
 
-    const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
+    const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', 'D', 'R', 'G', 'M'];
 
     // --- Slots spin handler ---
     const handleSlotSpin = () => {
@@ -485,7 +486,7 @@ function PlayContent() {
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
         <p className="text-accent-gold text-lg font-mono mb-2">{timer}с</p>
-        <h2 className="text-3xl font-display font-black mb-6 text-accent-gold">{BONUS_TITLES[bonusType || 'slots']}</h2>
+        <h2 className="text-3xl font-display font-black mb-6 text-accent-gold flex items-center gap-2">{BONUS_ICON_MAP[bonusType || 'slots']?.({ size: 28 })} {BONUS_TITLES[bonusType || 'slots']}</h2>
 
         {/* === WHEEL UI === */}
         {bonusType === 'wheel' && (
@@ -516,7 +517,7 @@ function PlayContent() {
             </div>
 
             {animating && (
-              <div className="text-6xl mb-6 animate-spin">🎡</div>
+              <div className="mb-6 animate-spin"><IconWheel size={48} /></div>
             )}
           </>
         )}
@@ -558,7 +559,7 @@ function PlayContent() {
                 >
                   {isRevealed && boxValue !== null
                     ? boxValue === 0 ? 'BUST' : `x${boxValue}`
-                    : hasPlayed ? '...' : '🎁'
+                    : hasPlayed ? '...' : '?'
                   }
                 </button>
               );
@@ -724,13 +725,13 @@ function PlayContent() {
               onClick={() => { voteNextRound(true); setHasVoted(true); }}
               className="bg-accent-green text-black font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
             >
-              ДА 🔥
+              ДА
             </button>
             <button
               onClick={() => { voteNextRound(false); setHasVoted(true); }}
               className="bg-accent-red text-white font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
             >
-              НЕТ ✋
+              НЕТ
             </button>
           </div>
         )}
@@ -743,16 +744,16 @@ function PlayContent() {
     const isMMMode = gameState.gameMode === 'market_maker';
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center p-4 overflow-y-auto">
-        <div className="text-5xl mt-6 mb-2">🏁</div>
+        <div className="mt-6 mb-2"><IconFinish size={48} /></div>
 
         {/* Market Maker Result */}
         {isMMMode && mmResult && (
           <div className={`w-full max-w-md mb-4 rounded-xl p-4 text-center border ${mmResult.mmWon ? 'bg-accent-gold/10 border-accent-gold/50' : 'bg-accent-green/10 border-accent-green/50'}`}>
-            <p className="text-xl font-black mb-2">
-              {mmResult.mmWon ? '👑 МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!' : '💪 ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
+            <p className="text-xl font-black mb-2 flex items-center justify-center gap-1">
+              {mmResult.mmWon ? <><IconCrown size={16} /> МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!</> : 'ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
             </p>
-            <p className="text-sm text-text-secondary">
-              👑 {mmResult.mmNickname}: ${mmResult.mmBalance.toFixed(0)} vs Трейдеры: ${mmResult.tradersAvg.toFixed(0)}
+            <p className="text-sm text-text-secondary flex items-center justify-center gap-1">
+              <IconCrown size={14} /> {mmResult.mmNickname}: ${mmResult.mmBalance.toFixed(0)} vs Трейдеры: ${mmResult.tradersAvg.toFixed(0)}
             </p>
           </div>
         )}
@@ -766,8 +767,8 @@ function PlayContent() {
               return (
               <div key={s.nickname} className={`rounded-xl p-4 ${isMM ? 'bg-accent-gold/10 border border-accent-gold/30' : s.rank === 1 ? 'bg-accent-gold/10 border border-accent-gold/30' : 'glass border border-border'}`}>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xl font-bold">
-                    {s.rank <= 3 ? MEDAL_EMOJIS[s.rank - 1] : `${s.rank}.`} {isMM ? '👑 ' : ''}{s.nickname}
+                  <span className="text-xl font-bold flex items-center gap-1">
+                    {s.rank === 1 ? <IconTrophy size={24} /> : s.rank === 2 ? <IconSilver size={24} /> : s.rank === 3 ? <IconBronze size={24} /> : `${s.rank}.`} {isMM ? <IconCrown size={16} /> : null}{s.nickname}
                   </span>
                   <span className="text-xl font-mono font-bold text-accent-gold">${s.balance.toFixed(0)}</span>
                 </div>

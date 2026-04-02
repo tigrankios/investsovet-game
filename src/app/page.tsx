@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { IconTV, IconPhone } from '@/components/icons';
 
 export default function Home() {
   const router = useRouter();
@@ -22,13 +23,13 @@ export default function Home() {
             onClick={() => router.push('/tv')}
             className="bg-gradient-to-r from-accent-gold to-amber-500 text-background font-display font-bold text-xl py-5 rounded-2xl glow-gold hover:scale-105 transition-all active:scale-95"
           >
-            📺 Запустить на ТВ
+            <span className="flex items-center justify-center gap-2"><IconTV size={24} /> Запустить на ТВ</span>
           </button>
           <button
             onClick={() => router.push('/play')}
             className="glass text-accent-green font-display font-bold text-xl py-5 rounded-2xl hover:border-accent-green/60 transition-all active:scale-95"
           >
-            📱 Войти как игрок
+            <span className="flex items-center justify-center gap-2"><IconPhone size={24} /> Войти как игрок</span>
           </button>
         </div>
 

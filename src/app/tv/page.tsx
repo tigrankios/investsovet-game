@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
-import { BONUS_TITLES, BONUS_EMOJIS, MEDAL_EMOJIS } from '@/lib/types';
+import { BONUS_TITLES } from '@/lib/types';
 import type { Candle, LeaderboardEntry, GameMode } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
+import { IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, BONUS_ICON_MAP } from '@/components/icons';
 
 // Эпичная музыка — бесплатные треки
 const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3'; // epic cinematic
@@ -61,7 +62,7 @@ export default function TVPage() {
               onClick={() => selectMode('classic')}
               className="group glass-strong border-2 border-accent-green/50 rounded-2xl p-8 w-72 text-center hover:border-accent-green hover:bg-surface-light transition-all hover:scale-105 active:scale-95"
             >
-              <div className="text-6xl mb-4">📊</div>
+              <div className="mb-4"><IconChart size={48} /></div>
               <h3 className="text-2xl font-display font-black text-accent-green mb-2">КЛАССИЧЕСКИЙ</h3>
               <p className="text-text-secondary">Все против всех. Торгуй, используй скиллы, доминируй.</p>
             </button>
@@ -70,7 +71,7 @@ export default function TVPage() {
               onClick={() => selectMode('market_maker')}
               className="group glass-strong border-2 border-accent-gold/50 rounded-2xl p-8 w-72 text-center hover:border-accent-gold hover:bg-surface-light transition-all hover:scale-105 active:scale-95"
             >
-              <div className="text-6xl mb-4">👑</div>
+              <div className="mb-4"><IconCrown size={48} /></div>
               <h3 className="text-2xl font-display font-black text-accent-gold mb-2">МАРКЕТ-МЕЙКЕР</h3>
               <p className="text-text-secondary">Один игрок управляет рынком. Остальные — против него.</p>
             </button>
@@ -104,7 +105,7 @@ export default function TVPage() {
             <span className="font-display text-accent-gold">SOVET</span>
           </h1>
           <p className="text-text-secondary text-xl mt-2">
-            {isMMMode ? '👑 Режим: Маркет-Мейкер' : 'Trading Arena'}
+            {isMMMode ? <span className="inline-flex items-center gap-1"><IconCrown size={16} /> Режим: Маркет-Мейкер</span> : 'Trading Arena'}
           </p>
         </header>
 
@@ -131,7 +132,7 @@ export default function TVPage() {
               </ul>
             )}
             {isMMMode && playerNames.length > 0 && (
-              <p className="text-accent-gold/70 text-sm mt-4">👑 Случайный игрок станет Маркет-Мейкером</p>
+              <p className="text-accent-gold/70 text-sm mt-4">Случайный игрок станет Маркет-Мейкером</p>
             )}
           </div>
         </div>
@@ -159,8 +160,8 @@ export default function TVPage() {
         <p className="text-text-secondary text-3xl mb-2">Раунд {gameState.roundNumber}</p>
         <p className="text-accent-gold text-2xl mb-4">{ticker}</p>
         {isMMMode && gameState.marketMakerNickname && (
-          <p className="text-accent-gold text-3xl font-bold mb-4 animate-pulse">
-            👑 МАРКЕТ-МЕЙКЕР: {gameState.marketMakerNickname}
+          <p className="text-accent-gold text-3xl font-bold mb-4 animate-pulse flex items-center justify-center gap-2">
+            <IconCrown size={20} /> МАРКЕТ-МЕЙКЕР: {gameState.marketMakerNickname}
           </p>
         )}
         <div className="text-[200px] font-display font-black text-accent-green animate-countdown leading-none" style={{ textShadow: '0 0 80px rgba(0,230,118,0.5)' }}>
@@ -197,7 +198,7 @@ export default function TVPage() {
           </div>
           <div className="flex items-center gap-2">
             {isMMMode && (
-              <span className="text-accent-gold text-sm font-bold mr-3">👑 MM: {gameState.marketMakerNickname}</span>
+              <span className="text-accent-gold text-sm font-bold mr-3 inline-flex items-center gap-1"><IconCrown size={14} /> MM: {gameState.marketMakerNickname}</span>
             )}
             <span className="w-2 h-2 bg-accent-green rounded-full animate-pulse" />
             <span className="text-text-secondary text-sm">LIVE</span>
@@ -230,7 +231,7 @@ export default function TVPage() {
 
     return (
       <div className="h-screen bg-background text-white flex flex-col items-center justify-center">
-        <div className="text-6xl mb-2">{BONUS_EMOJIS[bonusType || 'slots']}</div>
+        <div className="mb-2">{BONUS_ICON_MAP[bonusType || 'slots']?.({ size: 48 })}</div>
         <h1 className="text-6xl font-display font-black text-accent-gold mb-2">{BONUS_TITLES[bonusType || 'slots']}</h1>
         <p className="text-text-secondary text-xl mb-4">
           {bonusType === 'wheel' ? 'Игроки крутят колесо...' : bonusType === 'lootbox' ? 'Игроки выбирают коробки...' : bonusType === 'loto' ? 'Игроки выбирают числа...' : 'Игроки крутят барабаны...'}
@@ -287,8 +288,8 @@ export default function TVPage() {
         {roundResult && (
           <div className="mb-8 text-center">
             <p className="text-text-secondary text-xl">{roundResult.ticker} — {roundResult.duration}с</p>
-            <p className="text-3xl font-bold text-accent-green mt-2">
-              🏆 {roundResult.winner.nickname}: {roundResult.winner.totalPnl >= 0 ? '+' : ''}{roundResult.winner.totalPnl.toFixed(0)}$
+            <p className="text-3xl font-bold text-accent-green mt-2 flex items-center justify-center gap-1">
+              <IconTrophy size={20} /> {roundResult.winner.nickname}: {roundResult.winner.totalPnl >= 0 ? '+' : ''}{roundResult.winner.totalPnl.toFixed(0)}$
             </p>
           </div>
         )}
@@ -336,12 +337,12 @@ export default function TVPage() {
         {/* Market Maker Result */}
         {isMMMode && mmResult && (
           <div className={`w-full max-w-3xl mb-6 mt-4 rounded-2xl p-6 text-center border-2 ${mmResult.mmWon ? 'bg-accent-gold/10 border-accent-gold/50' : 'bg-accent-green/10 border-accent-green/50'}`}>
-            <h2 className="text-4xl font-display font-black mb-3">
-              {mmResult.mmWon ? '👑 МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!' : '💪 ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
+            <h2 className="text-4xl font-display font-black mb-3 flex items-center justify-center gap-2">
+              {mmResult.mmWon ? <><IconCrown size={24} /> МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!</> : 'ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
             </h2>
             <div className="flex justify-center gap-12 text-xl">
               <div>
-                <span className="text-accent-gold font-bold">👑 {mmResult.mmNickname}</span>
+                <span className="text-accent-gold font-bold inline-flex items-center gap-1"><IconCrown size={14} /> {mmResult.mmNickname}</span>
                 <span className="font-mono ml-2">${mmResult.mmBalance.toFixed(0)}</span>
               </div>
               <span className="text-text-secondary">vs</span>
@@ -374,9 +375,9 @@ export default function TVPage() {
                 const isMM = isMMMode && s.role === 'market_maker';
                 return (
                   <tr key={s.nickname} className={`border-t border-border ${s.rank === 1 ? 'text-accent-gold text-xl' : 'text-lg'} ${isMM ? 'bg-accent-gold/5' : ''}`}>
-                    <td className="py-4 font-bold">{s.rank <= 3 ? MEDAL_EMOJIS[s.rank - 1] : s.rank}</td>
+                    <td className="py-4 font-bold">{s.rank === 1 ? <IconTrophy size={24} /> : s.rank === 2 ? <IconSilver size={24} /> : s.rank === 3 ? <IconBronze size={24} /> : s.rank}</td>
                     <td className="py-4 font-bold">
-                      {isMM && '👑 '}{s.nickname}
+                      <span className="inline-flex items-center gap-1">{isMM && <IconCrown size={14} />}{s.nickname}</span>
                     </td>
                     <td className="py-4 text-right font-mono font-bold">${s.balance.toFixed(0)}</td>
                     <td className="py-4 text-right font-mono text-accent-green">${s.maxBalance.toFixed(0)}</td>
@@ -521,7 +522,7 @@ function CandlestickChart({ candles, positions = [] }: { candles: Candle[]; posi
 }
 
 function LeaderboardRow({ entry, rank, isMMMode = false }: { entry: LeaderboardEntry; rank: number; isMMMode?: boolean }) {
-  const rankDisplay = rank <= 3 ? MEDAL_EMOJIS[rank - 1] : `${rank}`;
+  const rankDisplay = rank === 1 ? <IconTrophy size={24} /> : rank === 2 ? <IconSilver size={24} /> : rank === 3 ? <IconBronze size={24} /> : `${rank}`;
   const medalColors = ['text-accent-gold', 'text-text-secondary', 'text-amber-400'];
   const rankColor = rank <= 3 ? medalColors[rank - 1] : 'text-text-muted';
   const isMM = isMMMode && entry.role === 'market_maker';
@@ -531,7 +532,7 @@ function LeaderboardRow({ entry, rank, isMMMode = false }: { entry: LeaderboardE
       <span className={`font-bold text-2xl w-10 text-center ${rankColor}`}>{rankDisplay}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          {isMM && <span className="text-lg">👑</span>}
+          {isMM && <IconCrown size={16} />}
           <p className="text-white font-semibold text-xl truncate">{entry.nickname}</p>
           {entry.hasPosition && (
             <span className={`text-sm px-2 py-0.5 rounded font-bold ${entry.positionDirection === 'long' ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-red/20 text-accent-red'}`}>
