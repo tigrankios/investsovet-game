@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useBinaryGame } from '@/lib/useBinaryGame';
+import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { formatPrice } from '@/lib/utils';
 import type { Candle } from '@/lib/types';
 import { IconTrophy, IconSilver, IconBronze, IconFinish } from '@/components/icons';
@@ -26,7 +27,6 @@ export default function PlayBinaryPage() {
 
 function PlayBinaryContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const roomFromUrl = searchParams.get('room') || '';
 
   const {
@@ -41,6 +41,8 @@ function PlayBinaryContent() {
   const [joined, setJoined] = useState(false);
   const [nickname, setNickname] = useState('');
   const [roomCode, setRoomCode] = useState(roomFromUrl);
+
+  useGameModeRedirect(gameState, 'binary', roomCode);
   const [betPercent, setBetPercent] = useState(25);
   const [resultAnimating, setResultAnimating] = useState(false);
 
@@ -67,14 +69,6 @@ function PlayBinaryContent() {
       setRoomCode(roomFromUrl);
     }
   }, [error, joined, gameState, roomFromUrl]);
-
-  // Auto-redirect if wrong game mode
-  useEffect(() => {
-    if (gameState && gameState.gameMode !== 'binary') {
-      const target = gameState.gameMode === 'market_maker' ? '/play-mm' : '/play';
-      router.replace(`${target}?room=${roomCode}`);
-    }
-  }, [gameState?.gameMode, roomCode, router]);
 
   // Trigger result animation
   useEffect(() => {

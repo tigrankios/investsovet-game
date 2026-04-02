@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
+import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { BONUS_TITLES, MAX_POSITION_PERCENT } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
@@ -26,8 +27,6 @@ export default function PlayMMPage() {
 function PlayMMContent() {
   const searchParams = useSearchParams();
   const roomFromUrl = searchParams.get('room') || '';
-  const router = useRouter();
-
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, liquidationAlert,
@@ -35,16 +34,11 @@ function PlayMMContent() {
     joinRoom, openPosition, closePosition, useMMLever, mmPushUp, mmPushDown, spinSlots, spinWheel, openLootbox, playLoto,
   } = useMarketMakerGame();
 
-  // Auto-redirect if wrong mode
-  useEffect(() => {
-    if (gameState?.gameMode === 'classic' && roomFromUrl) {
-      router.replace(`/play?room=${roomFromUrl}`);
-    }
-  }, [gameState?.gameMode, roomFromUrl, router]);
-
   const [joined, setJoined] = useState(false);
   const [nickname, setNickname] = useState('');
   const [roomCode, setRoomCode] = useState(roomFromUrl);
+
+  useGameModeRedirect(gameState, 'market_maker', roomCode);
   const [sizePercent, setSizePercent] = useState(25);
   const [leverage, setLeverage] = useState<Leverage>(25);
   const [bonusBetPercent, setBonusBetPercent] = useState(10);
