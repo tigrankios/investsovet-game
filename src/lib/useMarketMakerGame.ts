@@ -48,5 +48,13 @@ export function useMarketMakerGame() {
     getSocket().emit('useMMLever', { lever });
   }, []);
 
-  return { ...game, mmLeverAlert, mmRentAlert, mmResult, useMMLever };
+  const mmPushUp = useCallback(() => {
+    getSocket().emit('mmPush', { direction: 'up' });
+  }, []);
+
+  const mmPushDown = useCallback(() => {
+    getSocket().emit('mmPush', { direction: 'down' });
+  }, []);
+
+  return { ...game, mmLeverAlert, mmRentAlert, mmResult, useMMLever, mmPushUp, mmPushDown };
 }

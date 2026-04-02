@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useClassicGame } from '@/lib/useClassicGame';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
@@ -31,6 +31,7 @@ export default function PlayPage() {
 function PlayContent() {
   const searchParams = useSearchParams();
   const roomFromUrl = searchParams.get('room') || '';
+  const router = useRouter();
 
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
@@ -38,6 +39,13 @@ function PlayContent() {
     bonusResult, bonusData, skillAlert, finalStats,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto,
   } = useClassicGame();
+
+  // Auto-redirect if wrong mode
+  useEffect(() => {
+    if (gameState?.gameMode === 'market_maker' && roomFromUrl) {
+      router.replace(`/play-mm?room=${roomFromUrl}`);
+    }
+  }, [gameState?.gameMode, roomFromUrl, router]);
 
   // Reconnect: достаём данные из sessionStorage
   const [joined, setJoined] = useState(false);

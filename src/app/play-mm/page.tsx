@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
 import { BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
@@ -26,13 +26,21 @@ export default function PlayMMPage() {
 function PlayMMContent() {
   const searchParams = useSearchParams();
   const roomFromUrl = searchParams.get('room') || '';
+  const router = useRouter();
 
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, liquidationAlert,
     bonusResult, bonusData, finalStats, mmResult, mmLeverAlert, mmRentAlert,
-    joinRoom, openPosition, closePosition, useMMLever, spinSlots, spinWheel, openLootbox, playLoto,
+    joinRoom, openPosition, closePosition, useMMLever, mmPushUp, mmPushDown, spinSlots, spinWheel, openLootbox, playLoto,
   } = useMarketMakerGame();
+
+  // Auto-redirect if wrong mode
+  useEffect(() => {
+    if (gameState?.gameMode === 'classic' && roomFromUrl) {
+      router.replace(`/play?room=${roomFromUrl}`);
+    }
+  }, [gameState?.gameMode, roomFromUrl, router]);
 
   const [joined, setJoined] = useState(false);
   const [nickname, setNickname] = useState('');
@@ -350,6 +358,22 @@ function PlayMMContent() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* MM Push Buttons */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => mmPushUp()}
+                className="flex-1 py-4 rounded-xl font-bold text-lg bg-accent-green text-background active:scale-95 transition-all"
+              >
+                ВВЕРХ
+              </button>
+              <button
+                onClick={() => mmPushDown()}
+                className="flex-1 py-4 rounded-xl font-bold text-lg bg-accent-red text-white active:scale-95 transition-all"
+              >
+                ВНИЗ
+              </button>
             </div>
 
             {/* Trader Positions Dashboard */}
