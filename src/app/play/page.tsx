@@ -266,7 +266,7 @@ function PlayContent() {
 
         {/* Chart */}
         {!isBlind && candles.length > 0 && (
-          <div className="mx-4 mt-2 h-48 rounded-xl overflow-hidden">
+          <div className="mx-2 mt-2 rounded-xl overflow-hidden" style={{ height: '40vw', maxHeight: '220px', minHeight: '140px' }}>
             <MiniChart candles={candles} positions={leaderboard} />
           </div>
         )}
@@ -908,19 +908,21 @@ function MiniChart({ candles, positions = [] }: { candles: Candle[]; positions?:
   if (candles.length === 0) return null;
 
   const width = 600;
-  const height = 200;
-  const pad = { top: 10, right: 70, bottom: 10, left: 10 };
+  const height = 220;
+  const pad = { top: 10, right: 50, bottom: 10, left: 10 };
   const chartW = width - pad.left - pad.right;
   const chartH = height - pad.top - pad.bottom;
 
-  const visible = candles.slice(-60);
+  // Показываем все свечи (до 120), минимальная ширина свечи 4px
+  const maxCandles = Math.min(candles.length, Math.floor(chartW / 4));
+  const visible = candles.slice(-maxCandles);
   const visibleOffset = candles.length - visible.length;
   const maxP = Math.max(...visible.map((c) => c.high));
   const minP = Math.min(...visible.map((c) => c.low));
   const range = maxP - minP || 1;
 
   const gap = chartW / visible.length;
-  const candleW = Math.max(2, gap * 0.6);
+  const candleW = Math.max(2, gap * 0.65);
   const scaleY = (p: number) => pad.top + chartH - ((p - minP) / range) * chartH;
 
   const lastPrice = visible[visible.length - 1]?.close || 0;
