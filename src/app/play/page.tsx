@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useGame } from '@/lib/useGame';
+import { useClassicGame } from '@/lib/useClassicGame';
+import { getSocket } from '@/lib/useGame';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
+import type { MMLeverType } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
 import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
@@ -30,9 +32,42 @@ function PlayContent() {
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmLeverAlert, mmRentAlert,
-    joinRoom, openPosition, closePosition, usePlayerSkill, useMMLever, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
-  } = useGame();
+    bonusResult, bonusData, skillAlert, finalStats,
+    joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+  } = useClassicGame();
+
+  // MM-specific state (temporary until play-mm page is created)
+  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
+  const [mmLeverAlert, setMmLeverAlert] = useState('');
+  const [mmRentAlert, setMmRentAlert] = useState('');
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.on('mmLeverUsed', ({ lever, duration }: { lever: string; duration: number }) => {
+      const names: Record<string, string> = { commission: 'КОМИССИЯ x3', freeze: 'ЗАМОРОЗКА', squeeze: 'СЖАТИЕ' };
+      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
+      setTimeout(() => setMmLeverAlert(''), duration * 1000);
+    });
+    socket.on('mmRentTick', ({ amount }: { amount: number }) => {
+      setMmRentAlert(`-$${amount}`);
+      setTimeout(() => setMmRentAlert(''), 1500);
+    });
+    socket.on('mmInactivityPenalty', () => {
+      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
+      setTimeout(() => setMmLeverAlert(''), 3000);
+    });
+    socket.on('marketMakerResult', (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => setMmResult(data));
+    return () => {
+      socket.off('mmLeverUsed');
+      socket.off('mmRentTick');
+      socket.off('mmInactivityPenalty');
+      socket.off('marketMakerResult');
+    };
+  }, []);
+
+  const useMMLever = useCallback((lever: MMLeverType) => {
+    getSocket().emit('useMMLever', { lever });
+  }, []);
 
   // Reconnect: достаём данные из sessionStorage
   const [joined, setJoined] = useState(false);

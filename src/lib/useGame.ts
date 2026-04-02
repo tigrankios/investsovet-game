@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
-import {
-  SKILL_NAMES, SKILL_EMOJIS,
-} from './types';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
-  RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType, FinalPlayerStats,
-  GameMode, MMLeverType,
+  RoundResult, Candle, Leverage, BonusResult, BonusType, FinalPlayerStats,
+  GameMode,
 } from './types';
+
+// Re-export socket getter so mode-specific hooks can reuse it
+export { getSocket } from './socket-client';
 
 export function useGame() {
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
@@ -25,11 +25,8 @@ export function useGame() {
   const [liquidationAlert, setLiquidationAlert] = useState('');
   const [bonusResult, setBonusResult] = useState<BonusResult | null>(null);
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
-  const [skillAlert, setSkillAlert] = useState('');
   const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
-  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
-  const [mmLeverAlert, setMmLeverAlert] = useState('');
-  const [mmRentAlert, setMmRentAlert] = useState('');
+  const [priceAlert, setPriceAlert] = useState('');
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -73,37 +70,12 @@ export function useGame() {
     socket.on('bonusResult', (result) => setBonusResult(result));
     socket.on('bonusUpdate', (data) => setBonusData(data));
 
-    socket.on('skillAssigned', () => {
-      // playerUpdate will carry the skill info
+    socket.on('playerJoined', () => {
+      // handled via gameState update
     });
-    socket.on('skillUsed', ({ nickname, skill }) => {
-      const emoji = SKILL_EMOJIS[skill as SkillType] || '';
-      const name = SKILL_NAMES[skill as SkillType] || skill;
-      setSkillAlert(`${nickname}: ${emoji} ${name.toUpperCase()}!`);
-      setTimeout(() => setSkillAlert(''), 3000);
+    socket.on('playerLeft', () => {
+      // handled via gameState update
     });
-
-    socket.on('mmLeverUsed', ({ lever, duration }) => {
-      const names: Record<string, string> = {
-        commission: 'КОМИССИЯ x3',
-        freeze: 'ЗАМОРОЗКА',
-        squeeze: 'СЖАТИЕ',
-      };
-      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
-      setTimeout(() => setMmLeverAlert(''), duration * 1000);
-    });
-
-    socket.on('mmRentTick', ({ amount }) => {
-      setMmRentAlert(`-$${amount}`);
-      setTimeout(() => setMmRentAlert(''), 1500);
-    });
-
-    socket.on('mmInactivityPenalty', () => {
-      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
-      setTimeout(() => setMmLeverAlert(''), 3000);
-    });
-
-    socket.on('marketMakerResult', (data) => setMmResult(data));
 
     socket.on('error', (msg) => {
       setError(msg);
@@ -123,12 +95,8 @@ export function useGame() {
       socket.off('bonusResult');
       socket.off('bonusUpdate');
       socket.off('gameFinished');
-      socket.off('skillAssigned');
-      socket.off('skillUsed');
-      socket.off('mmLeverUsed');
-      socket.off('mmRentTick');
-      socket.off('mmInactivityPenalty');
-      socket.off('marketMakerResult');
+      socket.off('playerJoined');
+      socket.off('playerLeft');
       socket.off('error');
     };
   }, []);
@@ -138,7 +106,6 @@ export function useGame() {
   }, []);
 
   const joinRoom = useCallback((roomCode: string, nickname: string) => {
-    // Сохранить для reconnect
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('investsovet_room', roomCode);
       sessionStorage.setItem('investsovet_nick', nickname);
@@ -153,11 +120,6 @@ export function useGame() {
   }, []);
 
   const closePosition = useCallback(() => getSocket().emit('closePosition'), []);
-  const usePlayerSkill = useCallback(() => getSocket().emit('useSkill'), []);
-
-  const useMMLeverCb = useCallback((lever: MMLeverType) => {
-    getSocket().emit('useMMLever', { lever });
-  }, []);
 
   const spinSlots = useCallback((bet: number) => {
     getSocket().emit('spinSlots', { bet });
@@ -182,8 +144,8 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmLeverAlert, mmRentAlert,
-    createRoom, joinRoom, startGame, openPosition, closePosition, usePlayerSkill,
-    useMMLever: useMMLeverCb, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    bonusResult, bonusData, finalStats, priceAlert,
+    createRoom, joinRoom, startGame, openPosition, closePosition,
+    spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };
 }
