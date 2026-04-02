@@ -1,11 +1,11 @@
 import { Server as SocketServer } from 'socket.io';
 import type { GameState } from '../lib/types';
 import {
-  tickCandle, endRound, setupNextRound,
+  endRound, setupNextRound,
   startBonus, getBonusResults,
   assignRandomSkill, getFinalStats,
-  startVoting, getVoteResult,
 } from '../lib/engine';
+import { classicTickCandle } from '../lib/engine/classic';
 import {
   timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
@@ -44,7 +44,7 @@ export function classicStartTrading(io: SocketServer, game: GameState) {
       broadcastLeaderboard(io, game);
 
       const candleTimer = setInterval(() => {
-        const { continues, liquidated } = tickCandle(game);
+        const { continues, liquidated } = classicTickCandle(game);
 
         const idx = game.visibleCandleCount - 1;
         if (idx < game.candles.length) {

@@ -5,10 +5,12 @@ import type {
 import { AVAILABLE_LEVERAGES } from '../lib/types';
 import {
   createGame, addPlayer, removePlayer, getPlayer,
-  openPosition, closePosition, getVoteResult,
+  getVoteResult,
   spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
   useSkill, castVote,
 } from '../lib/engine';
+import { classicOpenPosition, classicClosePosition } from '../lib/engine/classic';
+import { mmOpenPosition, mmClosePosition } from '../lib/engine/market-maker';
 import {
   rooms, playerRooms, playerNicknames, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
@@ -131,7 +133,9 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       const game = rooms.get(roomCode);
       if (!game) return;
 
-      const result = openPosition(game, socket.id, direction, size, leverage);
+      const result = game.gameMode === 'market_maker'
+        ? mmOpenPosition(game, socket.id, direction, size, leverage)
+        : classicOpenPosition(game, socket.id, direction, size, leverage);
       socket.emit('tradeResult', result);
       sendPlayerUpdate(io, game, socket.id);
       broadcastLeaderboard(io, game);
@@ -143,7 +147,9 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       const game = rooms.get(roomCode);
       if (!game) return;
 
-      const result = closePosition(game, socket.id);
+      const result = game.gameMode === 'market_maker'
+        ? mmClosePosition(game, socket.id)
+        : classicClosePosition(game, socket.id);
       socket.emit('tradeResult', { success: result.success, message: result.message });
       sendPlayerUpdate(io, game, socket.id);
       broadcastLeaderboard(io, game);

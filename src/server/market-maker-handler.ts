@@ -3,11 +3,11 @@ import type {
   ClientToServerEvents, ServerToClientEvents, GameState, MMLeverType,
 } from '../lib/types';
 import {
-  tickCandle, endRound, setupNextRound,
+  endRound,
   startBonus, getBonusResults,
   assignRandomSkill, getFinalStats,
-  assignMarketMaker, useMMLever, getMarketMakerResult,
 } from '../lib/engine';
+import { assignMarketMaker, useMMLever, getMarketMakerResult, mmTickCandle, mmSetupNextRound } from '../lib/engine/market-maker';
 import {
   rooms, playerRooms, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
@@ -53,7 +53,7 @@ export function mmStartTrading(io: SocketServer, game: GameState) {
       broadcastLeaderboard(io, game);
 
       const candleTimer = setInterval(() => {
-        const { continues, liquidated } = tickCandle(game);
+        const { continues, liquidated } = mmTickCandle(game);
 
         const idx = game.visibleCandleCount - 1;
         if (idx < game.candles.length) {
@@ -174,7 +174,7 @@ function mmStartBonusPhase(io: SocketServer, game: GameState) {
             }
             scheduleRoomCleanup(game.roomCode, game);
           } else {
-            await setupNextRound(game);
+            await mmSetupNextRound(game);
             broadcastState(io, game);
             mmStartTrading(io, game);
           }
