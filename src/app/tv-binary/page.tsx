@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useGame, getSocket } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Candle } from '@/lib/types';
-import type { BinaryBet, BinaryDirection, BinaryRoundState } from '@/lib/types/binary';
+import type { BinaryBet, BinaryDirection, BinaryRoundState, BinaryRoundResult, BinaryPayout } from '@/lib/types/binary';
 import { formatPrice } from '@/lib/utils';
 import { IconTrophy, IconSilver, IconBronze, IconDice } from '@/components/icons';
 
@@ -19,13 +19,6 @@ interface BinaryRevealData {
 
 interface BinaryCandleData {
   candle: Candle;
-  index: number;
-}
-
-interface BinaryResultData {
-  direction: BinaryDirection;
-  finalPrice: number;
-  payouts: { nickname: string; amount: number }[];
 }
 
 interface BinaryLeaderboardEntry {
@@ -48,7 +41,7 @@ export default function TVBinaryPage() {
   const [downPool, setDownPool] = useState(0);
   const [binaryCandles, setBinaryCandles] = useState<Candle[]>([]);
   const [candlesRevealed, setCandlesRevealed] = useState(0);
-  const [resultData, setResultData] = useState<BinaryResultData | null>(null);
+  const [resultData, setResultData] = useState<BinaryRoundResult | null>(null);
   const [binaryLeaderboard, setBinaryLeaderboard] = useState<BinaryLeaderboardEntry[]>([]);
   const [betCount, setBetCount] = useState(0);
   const [eliminatedAlert, setEliminatedAlert] = useState('');
@@ -79,27 +72,19 @@ export default function TVBinaryPage() {
 
     socket.on('binaryCandle', (data: BinaryCandleData) => {
       setBinaryCandles(prev => [...prev, data.candle]);
-      setCandlesRevealed(data.index + 1);
+      setCandlesRevealed(prev => prev + 1);
     });
 
-    socket.on('binaryResult', (data: BinaryResultData) => {
+    socket.on('binaryResult', (data: BinaryRoundResult) => {
       setResultData(data);
     });
 
-    socket.on('binaryBetCount', (data: { count: number }) => {
-      setBetCount(data.count);
-    });
-
-    socket.on('binaryLeaderboard', (entries: BinaryLeaderboardEntry[]) => {
-      setBinaryLeaderboard(entries);
-    });
-
-    socket.on('playerEliminated', (data: { nickname: string }) => {
-      setEliminatedAlert(`${data.nickname} ВЫБЫЛ!`);
+    socket.on('playerEliminated', (data: { playerId: string }) => {
+      setEliminatedAlert(`Игрок ${data.playerId} ВЫБЫЛ!`);
       setTimeout(() => setEliminatedAlert(''), 3000);
     });
 
-    socket.on('binaryCancelled', (data: { message: string }) => {
+    socket.on('binaryRoundCancelled', (data: { message: string }) => {
       setCancelMessage(data.message || 'Все поставили одинаково — переигровка!');
       setTimeout(() => setCancelMessage(''), 3000);
     });
@@ -113,10 +98,8 @@ export default function TVBinaryPage() {
       socket.off('binaryReveal');
       socket.off('binaryCandle');
       socket.off('binaryResult');
-      socket.off('binaryBetCount');
-      socket.off('binaryLeaderboard');
       socket.off('playerEliminated');
-      socket.off('binaryCancelled');
+      socket.off('binaryRoundCancelled');
       socket.off('countdown');
     };
   }, []);
@@ -176,7 +159,7 @@ export default function TVBinaryPage() {
   const entryPrice = binaryRound?.entryPrice ?? 0;
   const ticker = binaryRound?.ticker ?? gameState.ticker ?? '';
   const roundNumber = binaryRound?.roundNumber ?? gameState.roundNumber ?? 0;
-  const maxRounds = binaryRound?.maxRounds ?? 20;
+  const maxRounds = binaryRound?.totalRounds ?? 20;
   const totalCandles = 5;
 
   // --- LOBBY ---
@@ -249,7 +232,7 @@ export default function TVBinaryPage() {
 
   // --- BINARY BETTING ---
   if (phase === 'binary_betting') {
-    const timer = binaryRound ? Math.max(0, 5 - (binaryRound.candlesRevealed || 0)) : countdown;
+    const timer = countdown;
 
     return (
       <div className="h-screen bg-background flex flex-col text-white">
@@ -506,12 +489,12 @@ export default function TVBinaryPage() {
             <h3 className="text-text-secondary text-xl font-display font-bold mb-5 uppercase tracking-wider">Результаты</h3>
             <div className="space-y-2">
               {resultData.payouts
-                .sort((a, b) => b.amount - a.amount)
+                .sort((a, b) => b.payout - a.payout)
                 .map(p => (
                   <div key={p.nickname} className="flex items-center justify-between glass rounded-xl px-4 py-3">
                     <span className="text-lg font-semibold text-white">{p.nickname}</span>
-                    <span className={`text-xl font-mono font-bold ${p.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                      {p.amount >= 0 ? '+' : ''}{p.amount.toLocaleString()}$
+                    <span className={`text-xl font-mono font-bold ${p.payout >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {p.payout >= 0 ? '+' : ''}{p.payout.toLocaleString()}$
                     </span>
                   </div>
                 ))}
