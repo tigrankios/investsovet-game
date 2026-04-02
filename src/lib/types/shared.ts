@@ -4,9 +4,10 @@
 
 import type { SkillType } from './classic';
 import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
+import type { BinaryRoundState, BinaryRevealedBets, BinaryRoundResult, BinaryDirection } from './binary';
 
 // --- Game Modes ---
-export type GameMode = 'classic' | 'market_maker';
+export type GameMode = 'classic' | 'market_maker' | 'binary';
 export type PlayerRole = 'trader' | 'market_maker';
 
 // --- Candle ---
@@ -135,11 +136,15 @@ export const AVAILABLE_LEVERAGES: Leverage[] = [25, 50, 100, 200, 500];
 // --- Game State ---
 export type GamePhase =
   | 'lobby'
-  | 'countdown'   // 3-2-1 перед стартом
-  | 'trading'     // раунд идёт
-  | 'bonus'       // бонусная мини-игра после раунда
-  | 'voting'      // голосование за следующую монету
-  | 'finished';   // итоги
+  | 'countdown'        // 3-2-1 перед стартом
+  | 'trading'          // раунд идёт
+  | 'bonus'            // бонусная мини-игра после раунда
+  | 'voting'           // голосование за следующую монету
+  | 'binary_betting'   // binary: делаем ставки UP/DOWN
+  | 'binary_reveal'    // binary: ставки раскрыты
+  | 'binary_waiting'   // binary: свечи раскрываются
+  | 'binary_result'    // binary: результат раунда
+  | 'finished';        // итоги
 
 export interface VoteState {
   votes: Record<string, boolean>; // playerId -> true=да, false=нет
@@ -296,6 +301,13 @@ export interface ServerToClientEvents {
   mmRentTick: (data: { amount: number; mmBalance: number }) => void;
   mmInactivityPenalty: () => void;
   marketMakerResult: (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => void;
+  // Binary Options mode
+  binaryRound: (round: BinaryRoundState) => void;
+  binaryReveal: (data: BinaryRevealedBets) => void;
+  binaryCandle: (data: { candle: Candle }) => void;
+  binaryResult: (result: BinaryRoundResult) => void;
+  playerEliminated: (data: { playerId: string }) => void;
+  betTimer: (seconds: number) => void;
   error: (message: string) => void;
 }
 
@@ -313,6 +325,8 @@ export interface ClientToServerEvents {
   voteNextRound: (data: { vote: boolean }) => void;
   useMMLever: (data: { lever: MMLeverType }) => void;
   mmPush: (data: { direction: 'up' | 'down' }) => void;
+  // Binary Options mode
+  placeBet: (data: { direction: BinaryDirection; percent: number }) => void;
 }
 
 // --- Bonus display ---
