@@ -83,6 +83,29 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
   });
 }
 
+function shouldEndGame(game: GameState): boolean {
+  const playersWithBalance = game.players.filter((p) => p.connected && p.balance > 0);
+  return playersWithBalance.length <= 1;
+}
+
+function finishGame(io: SocketServer, game: GameState) {
+  clearTimer(game.roomCode);
+  // Close all open positions first
+  const result = endRound(game);
+  game.phase = 'finished';
+  io.to(game.roomCode).emit('roundEnd', result);
+  broadcastState(io, game);
+  broadcastLeaderboard(io, game);
+  io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
+  const mmResult = getMarketMakerResult(game);
+  if (mmResult) {
+    io.to(game.roomCode).emit('marketMakerResult', mmResult);
+  }
+  for (const player of game.players) {
+    if (player.connected) sendPlayerUpdate(io, game, player.id);
+  }
+}
+
 function clearTimer(roomCode: string) {
   const timer = timers.get(roomCode);
   if (timer) {
@@ -159,6 +182,12 @@ function startTrading(io: SocketServer, game: GameState) {
           if (player.connected) sendPlayerUpdate(io, game, player.id);
         }
 
+        // Проверка: <= 1 игрока с положительным балансом — конец игры
+        if (liquidated.length > 0 && shouldEndGame(game)) {
+          finishGame(io, game);
+          return;
+        }
+
         // MM Casino: broadcast state every tick for lever timers
         if (game.gameMode === 'market_maker') {
           broadcastState(io, game);
@@ -177,6 +206,18 @@ function startTrading(io: SocketServer, game: GameState) {
           // Обновить балансы после закрытия позиций
           for (const player of game.players) {
             if (player.connected) sendPlayerUpdate(io, game, player.id);
+          }
+
+          // Проверка: <= 1 игрока с положительным балансом — конец игры
+          if (shouldEndGame(game)) {
+            setTimeout(() => {
+              game.phase = 'finished';
+              broadcastState(io, game);
+              io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
+              const mmRes = getMarketMakerResult(game);
+              if (mmRes) io.to(game.roomCode).emit('marketMakerResult', mmRes);
+            }, 3000);
+            return;
           }
 
           // Через 3 секунды — бонусная мини-игра
@@ -222,7 +263,7 @@ function startBonusPhase(io: SocketServer, game: GameState) {
       // Через 2 секунды — новый раунд или конец игры
       setTimeout(async () => {
         try {
-          if (game.roundNumber >= 6) {
+          if (game.roundNumber >= 6 || shouldEndGame(game)) {
             game.phase = 'finished';
             broadcastState(io, game);
             broadcastLeaderboard(io, game);
