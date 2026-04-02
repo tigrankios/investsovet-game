@@ -6,7 +6,7 @@ import { useGame } from '@/lib/useGame';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
-import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillFreeze, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
+import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
 
 const RANDOM_NICKS = [
   'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
@@ -403,7 +403,8 @@ function PlayContent() {
           <div className="mx-4 mt-3">
             <button
               onClick={usePlayerSkill}
-              className="w-full py-3 rounded-xl font-display font-bold text-lg active:scale-95 transition-all bg-gradient-to-r from-purple-600 to-pink-600 text-white animate-glow-pulse glow-purple"
+              disabled={playerState.frozen}
+              className={`w-full py-3 rounded-xl font-display font-bold text-lg active:scale-95 transition-all bg-gradient-to-r from-purple-600 to-pink-600 text-white ${playerState.frozen ? 'opacity-40' : 'animate-glow-pulse glow-purple'}`}
             >
               <span className="flex items-center justify-center gap-1">{SKILL_ICON_MAP[playerState.skill]?.({ size: 20 })} {SKILL_NAMES[playerState.skill]}</span>
               <span className="block text-xs font-normal opacity-80">{SKILL_DESCRIPTIONS[playerState.skill]}</span>
@@ -414,12 +415,18 @@ function PlayContent() {
           <div className="mx-4 mt-2 text-center">
             <span className="inline-flex items-center gap-1 text-text-secondary text-sm">{SKILL_ICON_MAP[playerState.skill]?.({ size: 14 })} {SKILL_NAMES[playerState.skill]} — использован</span>
             {playerState.shieldActive && <span className="inline-flex items-center gap-1 text-accent-gold text-sm ml-2"><IconSkillShield size={14} /> Щит активен</span>}
-            {playerState.freezeTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-blue text-sm ml-2"><IconSkillFreeze size={14} /> Заморозка: {playerState.freezeTicksLeft}</span>}
             {playerState.blindTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-purple text-sm ml-2"><IconSkillBlind size={14} /> Слепой: {playerState.blindTicksLeft}</span>}
           </div>
         )}
 
         <div className="flex-1" />
+
+        {/* Frozen indicator */}
+        {playerState.role !== 'market_maker' && playerState.frozen && (
+          <div className="mx-4 mt-2 bg-blue-600/20 border border-blue-500/50 rounded-xl px-3 py-2 text-blue-400 text-sm font-bold text-center animate-pulse">
+            🧊 Заморожен!
+          </div>
+        )}
 
         {/* Controls (traders only) */}
         {playerState.role !== 'market_maker' && (
@@ -427,13 +434,13 @@ function PlayContent() {
           {position ? (
             <button
               onClick={closePosition}
-              disabled={playerState.isFreezed}
+              disabled={playerState.isFreezed || playerState.frozen}
               className={`w-full py-5 rounded-xl font-display font-bold text-xl active:scale-95 transition-all ${
-                playerState.isFreezed ? 'bg-blue-600 text-white opacity-60' :
+                (playerState.isFreezed || playerState.frozen) ? 'bg-blue-600 text-white opacity-60' :
                 unrealizedPnl >= 0 ? 'bg-accent-green text-white glow-green' : 'bg-accent-red text-white glow-red'
               }`}
             >
-              {playerState.isFreezed ? 'ЗАМОРОЖЕНО' : `ЗАКРЫТЬ ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)}$`}
+              {(playerState.isFreezed || playerState.frozen) ? 'ЗАМОРОЖЕНО' : `ЗАКРЫТЬ ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)}$`}
             </button>
           ) : (
             <>
@@ -484,14 +491,14 @@ function PlayContent() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => openPosition('long', tradeSize, leverage)}
-                  disabled={tradeSize <= 0}
+                  disabled={tradeSize <= 0 || playerState.frozen}
                   className="bg-accent-green text-white font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-green"
                 >
                   <span className="flex items-center justify-center gap-1"><IconLong size={16} /> LONG</span>
                 </button>
                 <button
                   onClick={() => openPosition('short', tradeSize, leverage)}
-                  disabled={tradeSize <= 0}
+                  disabled={tradeSize <= 0 || playerState.frozen}
                   className="bg-accent-red text-white font-display font-bold text-xl py-6 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-red"
                 >
                   <span className="flex items-center justify-center gap-1"><IconShort size={16} /> SHORT</span>

@@ -69,7 +69,7 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
     skill: player.skill,
     skillUsed: player.skillUsed,
     shieldActive: player.shieldActive,
-    freezeTicksLeft: player.freezeTicksLeft,
+    frozen: !!player.frozenBy,
     blindTicksLeft: player.blindTicksLeft,
     role: player.role,
     rentDrain: game.mmCasino

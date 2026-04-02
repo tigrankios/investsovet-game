@@ -73,7 +73,7 @@ export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
   inverse: 'Инвертирует график на 10 свечей',
   shield: 'Защита от ликвидации (1 раз)',
   double_or_nothing: 'Удваивает маржу позиции',
-  freeze: 'Фиксирует цену на 5 свечей',
+  freeze: 'Блокирует действия других на 5 сек',
   blind: 'Скрывает график у ВСЕХ на 5 сек',
   steal: 'Крадёт 10% баланса случайного игрока',
   chaos: 'Меняет long/short у ВСЕХ открытых позиций',
@@ -99,8 +99,8 @@ export interface Player {
   // Активные эффекты
   pnlMultiplier: number;         // множитель PnL (trump_tweet: 3, обычно 1)
   shieldActive: boolean;         // защита от ликвидации
-  freezePrice: number | null;    // замороженная цена (null = не активна)
-  freezeTicksLeft: number;       // сколько тиков осталось заморозки
+  frozenBy: string | null;       // id игрока, который заморозил (null = не заморожен)
+  freezeTicksLeft: number;       // сколько тиков осталось заморозки (заблокирован)
   blindTicksLeft: number;        // сколько тиков слепого трейда осталось
   // Статистика за всю игру
   maxBalance: number;            // максимальный баланс за игру
@@ -361,7 +361,7 @@ export interface ClientPlayerState {
   skill: SkillType | null;
   skillUsed: boolean;
   shieldActive: boolean;
-  freezeTicksLeft: number;
+  frozen: boolean;
   blindTicksLeft: number;
   role: PlayerRole;
   rentDrain: number;

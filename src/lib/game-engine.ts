@@ -155,7 +155,7 @@ export function addPlayer(game: GameState, id: string, nickname: string): Player
     skillUsed: false,
     pnlMultiplier: 1,
     shieldActive: false,
-    freezePrice: null,
+    frozenBy: null,
     freezeTicksLeft: 0,
     blindTicksLeft: 0,
     maxBalance: INITIAL_BALANCE,
@@ -266,7 +266,7 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
     if (player.freezeTicksLeft > 0) {
       player.freezeTicksLeft--;
       if (player.freezeTicksLeft <= 0) {
-        player.freezePrice = null;
+        player.frozenBy = null;
       }
     }
     if (player.blindTicksLeft > 0) {
@@ -354,6 +354,7 @@ export function openPosition(
   const player = getPlayer(game, playerId);
   if (!player) return { success: false, message: 'Игрок не найден' };
   if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
+  if (player.frozenBy) return { success: false, message: 'Вы заморожены!' };
 
   // MM cannot trade in market_maker mode
   if (player.role === 'market_maker' && game.gameMode === 'market_maker') {
@@ -428,13 +429,14 @@ export function closePosition(
   const player = getPlayer(game, playerId);
   if (!player) return { success: false, message: 'Игрок не найден', pnl: 0 };
   if (!player.position) return { success: false, message: 'Нет открытой позиции', pnl: 0 };
+  if (player.frozenBy) return { success: false, message: 'Вы заморожены!', pnl: 0 };
 
   // MM Freeze lever: traders cannot close during freeze
   if (game.gameMode === 'market_maker' && game.mmCasino?.levers.freeze.active && player.role === 'trader') {
     return { success: false, message: 'Заморозка! Нельзя закрыть позицию', pnl: 0 };
   }
 
-  const price = player.freezePrice ?? game.currentPrice;
+  const price = game.currentPrice;
   const basePnl = calculatePnl(player.position, price);
   let pnl = roundBalance(basePnl * player.pnlMultiplier);
 
@@ -460,8 +462,6 @@ export function closePosition(
 
   // Сбросить одноразовые эффекты после закрытия позиции
   player.pnlMultiplier = 1;
-  player.freezePrice = null;
-  player.freezeTicksLeft = 0;
 
   const msg = `Закрыто: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
   player.position = null;
@@ -484,7 +484,7 @@ export function calculatePnl(position: Position, currentPrice: number): number {
 
 export function getUnrealizedPnl(player: Player, currentPrice: number): number {
   if (!player.position) return 0;
-  const price = player.freezePrice ?? currentPrice;
+  const price = currentPrice;
   const basePnl = calculatePnl(player.position, price);
   return roundBalance(basePnl * player.pnlMultiplier);
 }
@@ -644,7 +644,7 @@ function resetPlayerSkillEffects(player: Player): void {
   player.skillUsed = false;
   player.pnlMultiplier = 1;
   player.shieldActive = false;
-  player.freezePrice = null;
+  player.frozenBy = null;
   player.freezeTicksLeft = 0;
   player.blindTicksLeft = 0;
 }
@@ -658,6 +658,7 @@ export function useSkill(
   if (game.phase !== 'trading') return { success: false, message: 'Не время для скиллов' };
   if (!player.skill) return { success: false, message: 'Нет скилла' };
   if (player.skillUsed) return { success: false, message: 'Скилл уже использован' };
+  if (player.frozenBy) return { success: false, message: 'Вы заморожены!' };
 
   const skill = player.skill;
   player.skillUsed = true;
@@ -710,9 +711,13 @@ export function useSkill(
       return { success: true, message: '💰 ВА-БАНК! Следующая позиция будет удвоена', skill };
 
     case 'freeze':
-      player.freezePrice = game.currentPrice;
-      player.freezeTicksLeft = FREEZE_DURATION;
-      return { success: true, message: '🧊 ЗАМОРОЗКА! Цена зафиксирована на 5 свечей', skill };
+      for (const p of game.players) {
+        if (p.connected && p.id !== playerId) {
+          p.freezeTicksLeft = FREEZE_DURATION;
+          p.frozenBy = playerId;
+        }
+      }
+      return { success: true, message: '🧊 ЗАМОРОЗКА! Все игроки заблокированы на 5 сек!', skill, affectsAll: true };
 
     case 'blind':
       // Слепой трейд — скрыть график у ВСЕХ на 15 секунд
