@@ -36,6 +36,15 @@ export default function Home() {
             <span className="flex items-center justify-center gap-2"><IconTV size={24} /> Маркет-Мейкер — на ТВ</span>
           </button>
 
+          <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-1 mt-4">Режим: Бинарные Опционы</p>
+          <button
+            onClick={() => router.push('/tv-binary')}
+            className="bg-gradient-to-r from-accent-gold to-orange-500 text-background font-display font-bold text-xl py-5 rounded-2xl hover:scale-105 transition-all active:scale-95"
+            style={{ boxShadow: '0 0 30px rgba(255,152,0,0.3)' }}
+          >
+            <span className="flex items-center justify-center gap-2"><IconTV size={24} color="#0B0E17" /> Бинарные Опционы — на ТВ</span>
+          </button>
+
           <div className="border-t border-border mt-4 pt-4">
             <button
               onClick={() => router.push('/play')}
