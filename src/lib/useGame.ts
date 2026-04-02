@@ -8,7 +8,7 @@ import {
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
   RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType, FinalPlayerStats,
-  GameMode,
+  GameMode, MMLeverType,
 } from './types';
 
 export function useGame() {
@@ -28,7 +28,8 @@ export function useGame() {
   const [skillAlert, setSkillAlert] = useState('');
   const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
   const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
-  const [mmPushAlert, setMmPushAlert] = useState('');
+  const [mmLeverAlert, setMmLeverAlert] = useState('');
+  const [mmRentAlert, setMmRentAlert] = useState('');
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -81,9 +82,24 @@ export function useGame() {
       setTimeout(() => setSkillAlert(''), 3000);
     });
 
-    socket.on('mmPush', ({ direction }) => {
-      setMmPushAlert(direction === 'up' ? '\u26A1 \u041C\u041C \u0434\u0432\u0438\u0433\u0430\u0435\u0442 \u0440\u044B\u043D\u043E\u043A \u0412\u0412\u0415\u0420\u0425!' : '\u26A1 \u041C\u041C \u0434\u0432\u0438\u0433\u0430\u0435\u0442 \u0440\u044B\u043D\u043E\u043A \u0412\u041D\u0418\u0417!');
-      setTimeout(() => setMmPushAlert(''), 2000);
+    socket.on('mmLeverUsed', ({ lever, duration }) => {
+      const names: Record<string, string> = {
+        commission: 'КОМИССИЯ x3',
+        freeze: 'ЗАМОРОЗКА',
+        squeeze: 'СЖАТИЕ',
+      };
+      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
+      setTimeout(() => setMmLeverAlert(''), duration * 1000);
+    });
+
+    socket.on('mmRentTick', ({ amount }) => {
+      setMmRentAlert(`-$${amount}`);
+      setTimeout(() => setMmRentAlert(''), 1500);
+    });
+
+    socket.on('mmInactivityPenalty', () => {
+      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
+      setTimeout(() => setMmLeverAlert(''), 3000);
     });
 
     socket.on('marketMakerResult', (data) => setMmResult(data));
@@ -108,7 +124,9 @@ export function useGame() {
       socket.off('gameFinished');
       socket.off('skillAssigned');
       socket.off('skillUsed');
-      socket.off('mmPush');
+      socket.off('mmLeverUsed');
+      socket.off('mmRentTick');
+      socket.off('mmInactivityPenalty');
       socket.off('marketMakerResult');
       socket.off('error');
     };
@@ -136,8 +154,8 @@ export function useGame() {
   const closePosition = useCallback(() => getSocket().emit('closePosition'), []);
   const usePlayerSkill = useCallback(() => getSocket().emit('useSkill'), []);
 
-  const mmPush = useCallback((direction: 'up' | 'down') => {
-    getSocket().emit('mmPush', { direction });
+  const useMMLeverCb = useCallback((lever: MMLeverType) => {
+    getSocket().emit('useMMLever', { lever });
   }, []);
 
   const spinSlots = useCallback((bet: number) => {
@@ -163,8 +181,8 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmPushAlert,
+    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmLeverAlert, mmRentAlert,
     createRoom, joinRoom, startGame, openPosition, closePosition, usePlayerSkill,
-    mmPush, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    useMMLever: useMMLeverCb, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };
 }

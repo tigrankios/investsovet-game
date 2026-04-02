@@ -1,15 +1,16 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import type {
   ClientToServerEvents, ServerToClientEvents, GameState, ClientGameState, Leverage,
+  MMLeverType,
 } from '../lib/types';
-import { AVAILABLE_LEVERAGES } from '../lib/types';
+import { AVAILABLE_LEVERAGES, TRADER_INACTIVITY_THRESHOLD_SEC } from '../lib/types';
 import {
   createGame, addPlayer, removePlayer, getPlayer,
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
   startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
   assignRandomSkill, useSkill, getFinalStats,
-  assignMarketMaker, mmPush as mmPushEngine, getMarketMakerResult,
+  assignMarketMaker, useMMLever, getMarketMakerResult,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -41,6 +42,10 @@ function getClientGameState(game: GameState): ClientGameState {
     availableLeverages: game.availableLeverages,
     gameMode: game.gameMode,
     marketMakerNickname: mm?.nickname || null,
+    mmLevers: game.mmCasino?.levers || null,
+    mmBalance: game.marketMakerId
+      ? Math.round((game.players.find((p) => p.id === game.marketMakerId)?.balance || 0) * 100) / 100
+      : 0,
   };
 }
 
@@ -66,6 +71,14 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
     freezeTicksLeft: player.freezeTicksLeft,
     blindTicksLeft: player.blindTicksLeft,
     role: player.role,
+    rentDrain: game.mmCasino
+      ? (() => {
+          const lastOpen = game.mmCasino.traderLastOpenTime[playerId] ?? 0;
+          const isInactive = (game.elapsed - lastOpen) >= TRADER_INACTIVITY_THRESHOLD_SEC;
+          return isInactive ? 200 : 100;
+        })()
+      : 0,
+    isFreezed: !!(game.mmCasino?.levers.freeze.active && player.role === 'trader'),
   });
 }
 
@@ -143,6 +156,11 @@ function startTrading(io: SocketServer, game: GameState) {
         // Обновить PnL каждого игрока
         for (const player of game.players) {
           if (player.connected) sendPlayerUpdate(io, game, player.id);
+        }
+
+        // MM Casino: broadcast state every tick for lever timers
+        if (game.gameMode === 'market_maker') {
+          broadcastState(io, game);
         }
 
         if (game.elapsed % 2 === 0) broadcastLeaderboard(io, game);
@@ -547,15 +565,20 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       });
     });
 
-    socket.on('mmPush', ({ direction }) => {
+    socket.on('useMMLever', ({ lever }) => {
+      if (!['commission', 'freeze', 'squeeze'].includes(lever)) {
+        socket.emit('error', 'Invalid lever');
+        return;
+      }
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
       if (!game) return;
 
-      const result = mmPushEngine(game, socket.id, direction);
+      const result = useMMLever(game, socket.id, lever as MMLeverType);
       if (result.success) {
-        io.to(roomCode).emit('mmPush', { direction });
+        io.to(roomCode).emit('mmLeverUsed', { lever: lever as MMLeverType, duration: result.duration! });
+        broadcastState(io, game);
       } else {
         socket.emit('error', result.message);
       }
