@@ -1,352 +1,38 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import type {
-  ClientToServerEvents, ServerToClientEvents, GameState, ClientGameState, Leverage,
-  MMLeverType,
+  ClientToServerEvents, ServerToClientEvents, Leverage,
 } from '../lib/types';
-import { AVAILABLE_LEVERAGES, TRADER_INACTIVITY_THRESHOLD_SEC } from '../lib/types';
+import { AVAILABLE_LEVERAGES } from '../lib/types';
 import {
   createGame, addPlayer, removePlayer, getPlayer,
-  tickCandle, openPosition, closePosition, getLeaderboard, endRound,
-  getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
-  startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
-  assignRandomSkill, useSkill, getFinalStats,
-  assignMarketMaker, useMMLever, getMarketMakerResult,
+  openPosition, closePosition, getVoteResult,
+  spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
+  useSkill, castVote,
 } from '../lib/engine';
+import {
+  rooms, playerRooms, playerNicknames, timers,
+  broadcastState, broadcastLeaderboard, sendPlayerUpdate,
+  clearTimer, shouldEndGame, scheduleRoomCleanup,
+} from './shared-state';
+import { classicStartTrading } from './classic-handler';
+import { mmStartTrading, registerMMEvents } from './market-maker-handler';
+
+// Re-export shared state and helpers for backward compatibility
+export {
+  rooms, playerRooms, playerNicknames, timers,
+  broadcastState, broadcastLeaderboard, sendPlayerUpdate,
+  clearTimer, shouldEndGame, scheduleRoomCleanup,
+} from './shared-state';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
-const rooms = new Map<string, GameState>();
-const playerRooms = new Map<string, string>(); // socketId -> roomCode
-const playerNicknames = new Map<string, string>(); // socketId -> nickname (для reconnect)
-const timers = new Map<string, NodeJS.Timeout>();
-
-function getClientGameState(game: GameState): ClientGameState {
-  const voteResult = getVoteResult(game);
-  const mm = game.marketMakerId ? game.players.find((p) => p.id === game.marketMakerId) : null;
-  return {
-    roomCode: game.roomCode,
-    phase: game.phase,
-    playerCount: game.players.filter((p) => p.connected).length,
-    playerNames: game.players.filter((p) => p.connected).map((p) => p.nickname),
-    ticker: game.ticker,
-    visibleCandles: game.candles.slice(0, game.visibleCandleCount),
-    currentPrice: game.currentPrice,
-    elapsed: game.elapsed,
-    roundNumber: game.roundNumber,
-    voteYes: voteResult.yes,
-    voteNo: voteResult.no,
-    voteTotal: voteResult.total,
-    voteTimer: game.voteState?.timer || 0,
-    bonusTimer: game.bonusState?.timer || 0,
-    bonusType: game.bonusState?.bonusType || null,
-    availableLeverages: game.availableLeverages,
-    gameMode: game.gameMode,
-    marketMakerNickname: mm?.nickname || null,
-    mmLevers: game.mmCasino?.levers || null,
-    mmBalance: game.marketMakerId
-      ? Math.round((game.players.find((p) => p.id === game.marketMakerId)?.balance || 0) * 100) / 100
-      : 0,
-    blindActive: game.players.some((p) => p.blindTicksLeft > 0),
-  };
-}
-
-function broadcastState(io: SocketServer, game: GameState) {
-  io.to(game.roomCode).emit('gameState', getClientGameState(game));
-}
-
-function broadcastLeaderboard(io: SocketServer, game: GameState) {
-  io.to(game.roomCode).emit('leaderboard', getLeaderboard(game));
-}
-
-function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
-  const player = getPlayer(game, playerId);
-  if (!player) return;
-  io.to(playerId).emit('playerUpdate', {
-    balance: Math.round(player.balance * 100) / 100,
-    position: player.position,
-    pnl: Math.round(player.pnl * 100) / 100,
-    unrealizedPnl: Math.round(getUnrealizedPnl(player, game.currentPrice) * 100) / 100,
-    skill: player.skill,
-    skillUsed: player.skillUsed,
-    shieldActive: player.shieldActive,
-    frozen: !!player.frozenBy,
-    blindTicksLeft: player.blindTicksLeft,
-    role: player.role,
-    rentDrain: game.mmCasino
-      ? (() => {
-          const lastOpen = game.mmCasino.traderLastOpenTime[playerId] ?? 0;
-          const isInactive = (game.elapsed - lastOpen) >= TRADER_INACTIVITY_THRESHOLD_SEC;
-          return isInactive ? 200 : 100;
-        })()
-      : 0,
-    isFreezed: !!(game.mmCasino?.levers.freeze.active && player.role === 'trader'),
-  });
-}
-
-function shouldEndGame(game: GameState): boolean {
-  const playersWithBalance = game.players.filter((p) => p.connected && p.balance > 0);
-  return playersWithBalance.length <= 1;
-}
-
-function finishGame(io: SocketServer, game: GameState) {
-  clearTimer(game.roomCode);
-  // Close all open positions first
-  const result = endRound(game);
-  game.phase = 'finished';
-  io.to(game.roomCode).emit('roundEnd', result);
-  broadcastState(io, game);
-  broadcastLeaderboard(io, game);
-  io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-  const mmResult = getMarketMakerResult(game);
-  if (mmResult) {
-    io.to(game.roomCode).emit('marketMakerResult', mmResult);
-  }
-  for (const player of game.players) {
-    if (player.connected) sendPlayerUpdate(io, game, player.id);
-  }
-}
-
-function clearTimer(roomCode: string) {
-  const timer = timers.get(roomCode);
-  if (timer) {
-    clearInterval(timer);
-    timers.delete(roomCode);
-  }
-}
-
-function scheduleRoomCleanup(roomCode: string, game: GameState) {
-  setTimeout(() => {
-    rooms.delete(roomCode);
-    for (const player of game.players) {
-      playerRooms.delete(player.id);
-      playerNicknames.delete(player.id);
-    }
-    clearTimer(roomCode);
-    console.log(`[WS] Room ${roomCode} cleaned up (finished game)`);
-  }, 5 * 60 * 1000);
-}
-
-function startTrading(io: SocketServer, game: GameState) {
-  // Assign Market Maker on first round
-  if (game.gameMode === 'market_maker' && game.roundNumber === 1) {
-    assignMarketMaker(game);
-  }
-
-  game.phase = 'countdown';
-  broadcastState(io, game);
-
-  let count = 3;
-  io.to(game.roomCode).emit('countdown', count);
-
-  const countdownTimer = setInterval(() => {
-    count--;
-    if (count > 0) {
-      io.to(game.roomCode).emit('countdown', count);
-    } else {
-      clearInterval(countdownTimer);
-
-      game.phase = 'trading';
-      game.visibleCandleCount = 1;
-      game.currentPrice = game.candles[0].close;
-
-      // Раздать скиллы всем игрокам
-      for (const player of game.players) {
-        if (player.connected) {
-          const skill = assignRandomSkill(player);
-          io.to(player.id).emit('skillAssigned', skill);
-        }
-      }
-
-      broadcastState(io, game);
-      broadcastLeaderboard(io, game);
-
-      const candleTimer = setInterval(() => {
-        const { continues, liquidated } = tickCandle(game);
-
-        const idx = game.visibleCandleCount - 1;
-        if (idx < game.candles.length) {
-          io.to(game.roomCode).emit('candleUpdate', {
-            candle: game.candles[idx],
-            price: game.currentPrice,
-            index: idx,
-          });
-        }
-
-        // Ликвидации
-        for (const liq of liquidated) {
-          io.to(game.roomCode).emit('liquidated', liq);
-        }
-
-        // Обновить PnL каждого игрока
-        for (const player of game.players) {
-          if (player.connected) sendPlayerUpdate(io, game, player.id);
-        }
-
-        // Проверка: <= 1 игрока с положительным балансом — конец игры
-        if (liquidated.length > 0 && shouldEndGame(game)) {
-          finishGame(io, game);
-          return;
-        }
-
-        // MM Casino: broadcast state every tick for lever timers
-        if (game.gameMode === 'market_maker') {
-          broadcastState(io, game);
-        }
-
-        if (game.elapsed % 2 === 0) broadcastLeaderboard(io, game);
-
-        if (!continues) {
-          clearInterval(candleTimer);
-          timers.delete(game.roomCode);
-
-          const result = endRound(game);
-          io.to(game.roomCode).emit('roundEnd', result);
-          broadcastLeaderboard(io, game);
-
-          // Обновить балансы после закрытия позиций
-          for (const player of game.players) {
-            if (player.connected) sendPlayerUpdate(io, game, player.id);
-          }
-
-          // Проверка: <= 1 игрока с положительным балансом — конец игры
-          if (shouldEndGame(game)) {
-            setTimeout(() => {
-              game.phase = 'finished';
-              broadcastState(io, game);
-              io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-              const mmRes = getMarketMakerResult(game);
-              if (mmRes) io.to(game.roomCode).emit('marketMakerResult', mmRes);
-            }, 3000);
-            return;
-          }
-
-          // Через 3 секунды — бонусная мини-игра
-          setTimeout(() => {
-            startBonusPhase(io, game);
-          }, 3000);
-        }
-      }, 1000);
-
-      timers.set(game.roomCode, candleTimer);
-    }
-  }, 1000);
-}
-
-function startBonusPhase(io: SocketServer, game: GameState) {
-  startBonus(game);
-  broadcastState(io, game);
-
-  io.to(game.roomCode).emit('bonusUpdate', {
-    timer: game.bonusState!.timer,
-    bonusType: game.bonusState!.bonusType,
-    results: [],
-  });
-
-  const bonusTimer = setInterval(() => {
-    if (!game.bonusState) { clearInterval(bonusTimer); return; }
-    game.bonusState.timer--;
-
-    io.to(game.roomCode).emit('bonusUpdate', {
-      timer: game.bonusState.timer,
-      bonusType: game.bonusState.bonusType,
-      results: getBonusResults(game),
-    });
-
-    if (game.bonusState.timer <= 0) {
-      clearInterval(bonusTimer);
-      // Обновить балансы после бонуса
-      for (const player of game.players) {
-        if (player.connected) sendPlayerUpdate(io, game, player.id);
-      }
-      broadcastLeaderboard(io, game);
-
-      // Через 2 секунды — новый раунд или конец игры
-      setTimeout(async () => {
-        try {
-          if (game.roundNumber >= 6 || shouldEndGame(game)) {
-            game.phase = 'finished';
-            broadcastState(io, game);
-            broadcastLeaderboard(io, game);
-            io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-            // Market Maker result
-            const mmResult = getMarketMakerResult(game);
-            if (mmResult) {
-              io.to(game.roomCode).emit('marketMakerResult', mmResult);
-            }
-            // Schedule room cleanup after 5 minutes
-            scheduleRoomCleanup(game.roomCode, game);
-          } else {
-            await setupNextRound(game);
-            broadcastState(io, game);
-            startTrading(io, game);
-          }
-        } catch (err) {
-          console.error('[Game] Failed to setup next round:', err);
-          game.phase = 'finished';
-          broadcastState(io, game);
-          scheduleRoomCleanup(game.roomCode, game);
-        }
-      }, 2000);
-    }
-  }, 1000);
-}
-
-function startVotingPhase(io: SocketServer, game: GameState) {
-  startVoting(game);
-  broadcastState(io, game);
-
-  const voteResult = getVoteResult(game);
-  io.to(game.roomCode).emit('voteUpdate', {
-    yes: voteResult.yes,
-    no: voteResult.no,
-    total: voteResult.total,
-    timer: game.voteState!.timer,
-  });
-
-  const voteTimer = setInterval(() => {
-    if (!game.voteState) { clearInterval(voteTimer); return; }
-    game.voteState.timer--;
-
-    const result = getVoteResult(game);
-    io.to(game.roomCode).emit('voteUpdate', {
-      yes: result.yes, no: result.no, total: result.total,
-      timer: game.voteState.timer,
-    });
-
-    if (game.voteState.timer <= 0) {
-      clearInterval(voteTimer);
-      resolveVote(io, game);
-    }
-  }, 1000);
-}
-
-async function resolveVote(io: SocketServer, game: GameState) {
-  try {
-    const result = getVoteResult(game);
-    if (result.majority) {
-      // Большинство за — новый раунд
-      await setupNextRound(game);
-      broadcastState(io, game);
-      startTrading(io, game);
-    } else {
-      // Большинство против — игра окончена
-      game.phase = 'finished';
-      game.voteState = null;
-      broadcastState(io, game);
-      broadcastLeaderboard(io, game);
-      scheduleRoomCleanup(game.roomCode, game);
-    }
-  } catch (err) {
-    console.error('[Game] Failed to resolve vote:', err);
-    game.phase = 'finished';
-    broadcastState(io, game);
-    scheduleRoomCleanup(game.roomCode, game);
-  }
-}
+// ---- Main setup ----
 
 export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, ServerToClientEvents>) {
   io.on('connection', (socket: GameSocket) => {
     console.log(`[WS] Connected: ${socket.id}`);
+
+    // --- Room management ---
 
     socket.on('createRoom', async ({ gameMode }) => {
       const game = await createGame(gameMode);
@@ -374,10 +60,9 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         return;
       }
 
-      // Reconnect — если игрок с таким ником уже есть
+      // Reconnect
       const existing = game.players.find((p) => p.nickname === nickname);
       if (existing) {
-        // Обновить ID сокета
         const oldId = existing.id;
         existing.id = socket.id;
         existing.connected = true;
@@ -406,6 +91,8 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       console.log(`[WS] ${nickname} joined ${roomCode}`);
     });
 
+    // --- Start game (delegates to mode-specific handler) ---
+
     socket.on('startGame', () => {
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
@@ -415,9 +102,15 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         socket.emit('error', 'Нужен хотя бы 1 игрок');
         return;
       }
-      console.log(`[WS] Game starting in ${roomCode}`);
-      startTrading(io, game);
+      console.log(`[WS] Game starting in ${roomCode} (mode: ${game.gameMode})`);
+      if (game.gameMode === 'market_maker') {
+        mmStartTrading(io, game);
+      } else {
+        classicStartTrading(io, game);
+      }
     });
+
+    // --- Trading events (shared across modes) ---
 
     socket.on('openPosition', ({ direction, size, leverage }) => {
       if (direction !== 'long' && direction !== 'short') {
@@ -472,7 +165,6 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
             io.to(roomCode).emit('skillUsed', { nickname: player.nickname, skill: result.skill });
           }
         }
-        // Inverse affects all players — broadcast state
         if (result.affectsAll) {
           broadcastState(io, game);
           for (const p of game.players) {
@@ -484,6 +176,8 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         socket.emit('error', result.message);
       }
     });
+
+    // --- Bonus events (shared across modes) ---
 
     socket.on('spinSlots', ({ bet }) => {
       if (typeof bet !== 'number' || bet <= 0 || !isFinite(bet)) {
@@ -593,6 +287,8 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       }
     });
 
+    // --- Vote events ---
+
     socket.on('voteNextRound', ({ vote }) => {
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
@@ -607,24 +303,11 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       });
     });
 
-    socket.on('useMMLever', ({ lever }) => {
-      if (!['commission', 'freeze', 'squeeze'].includes(lever)) {
-        socket.emit('error', 'Invalid lever');
-        return;
-      }
-      const roomCode = playerRooms.get(socket.id);
-      if (!roomCode) return;
-      const game = rooms.get(roomCode);
-      if (!game) return;
+    // --- Mode-specific events ---
 
-      const result = useMMLever(game, socket.id, lever as MMLeverType);
-      if (result.success) {
-        io.to(roomCode).emit('mmLeverUsed', { lever: lever as MMLeverType, duration: result.duration! });
-        broadcastState(io, game);
-      } else {
-        socket.emit('error', result.message);
-      }
-    });
+    registerMMEvents(socket, io);
+
+    // --- Disconnect ---
 
     socket.on('disconnect', () => {
       const roomCode = playerRooms.get(socket.id);
@@ -636,7 +319,6 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
           if (nick) io.to(roomCode).emit('playerLeft', nick);
           broadcastState(io, game);
 
-          // Не удаляем комнату сразу — дадим шанс на реконнект
           setTimeout(() => {
             if (game.players.every((p) => !p.connected)) {
               clearTimer(roomCode);
