@@ -3,36 +3,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useGame, getSocket } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Candle } from '@/lib/types';
-import type { BinaryBet, BinaryDirection, BinaryRoundState } from '@/lib/types/binary';
+import type { Candle, LeaderboardEntry } from '@/lib/types';
+import type { BinaryBet, BinaryDirection, BinaryRoundState, BinaryRoundResult, BinaryPayout, BinaryRevealedBets } from '@/lib/types/binary';
+import { BINARY_MAX_ROUNDS } from '@/lib/types/binary';
 import { formatPrice } from '@/lib/utils';
 import { IconTrophy, IconSilver, IconBronze, IconDice } from '@/components/icons';
 
 const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3';
-
-// --- Binary-specific event data types ---
-interface BinaryRevealData {
-  bets: BinaryBet[];
-  upPool: number;
-  downPool: number;
-}
-
-interface BinaryCandleData {
-  candle: Candle;
-  index: number;
-}
-
-interface BinaryResultData {
-  direction: BinaryDirection;
-  finalPrice: number;
-  payouts: { nickname: string; amount: number }[];
-}
-
-interface BinaryLeaderboardEntry {
-  nickname: string;
-  balance: number;
-  eliminated: boolean;
-}
 
 export default function TVBinaryPage() {
   const {
@@ -48,9 +25,7 @@ export default function TVBinaryPage() {
   const [downPool, setDownPool] = useState(0);
   const [binaryCandles, setBinaryCandles] = useState<Candle[]>([]);
   const [candlesRevealed, setCandlesRevealed] = useState(0);
-  const [resultData, setResultData] = useState<BinaryResultData | null>(null);
-  const [binaryLeaderboard, setBinaryLeaderboard] = useState<BinaryLeaderboardEntry[]>([]);
-  const [betCount, setBetCount] = useState(0);
+  const [resultData, setResultData] = useState<BinaryRoundResult | null>(null);
   const [eliminatedAlert, setEliminatedAlert] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [cancelMessage, setCancelMessage] = useState('');
@@ -67,41 +42,38 @@ export default function TVBinaryPage() {
       setUpPool(0);
       setDownPool(0);
       setResultData(null);
-      setBetCount(0);
       setCancelMessage('');
     });
 
-    socket.on('binaryReveal', (data: BinaryRevealData) => {
+    socket.on('binaryReveal', (data: BinaryRevealedBets) => {
       setRevealedBets(data.bets);
       setUpPool(data.upPool);
       setDownPool(data.downPool);
     });
 
-    socket.on('binaryCandle', (data: BinaryCandleData) => {
-      setBinaryCandles(prev => [...prev, data.candle]);
-      setCandlesRevealed(data.index + 1);
+    socket.on('binaryCandle', ({ candle }: { candle: Candle }) => {
+      setBinaryCandles(prev => [...prev, candle]);
+      setCandlesRevealed(prev => prev + 1);
     });
 
-    socket.on('binaryResult', (data: BinaryResultData) => {
-      setResultData(data);
+    socket.on('binaryResult', (result: BinaryRoundResult) => {
+      setResultData(result);
     });
 
-    socket.on('binaryBetCount', (data: { count: number }) => {
-      setBetCount(data.count);
-    });
-
-    socket.on('binaryLeaderboard', (entries: BinaryLeaderboardEntry[]) => {
-      setBinaryLeaderboard(entries);
-    });
-
-    socket.on('playerEliminated', (data: { nickname: string }) => {
-      setEliminatedAlert(`${data.nickname} ВЫБЫЛ!`);
+    socket.on('playerEliminated', ({ playerId }: { playerId: string }) => {
+      // Look up nickname from leaderboard or revealed bets
+      const name = playerId;
+      setEliminatedAlert(`${name} ВЫБЫЛ!`);
       setTimeout(() => setEliminatedAlert(''), 3000);
     });
 
-    socket.on('binaryCancelled', (data: { message: string }) => {
+    socket.on('binaryRoundCancelled', (data: { message: string }) => {
       setCancelMessage(data.message || 'Все поставили одинаково — переигровка!');
       setTimeout(() => setCancelMessage(''), 3000);
+    });
+
+    socket.on('betTimer', (seconds: number) => {
+      setCountdown(seconds);
     });
 
     socket.on('countdown', (sec: number) => {
@@ -113,10 +85,9 @@ export default function TVBinaryPage() {
       socket.off('binaryReveal');
       socket.off('binaryCandle');
       socket.off('binaryResult');
-      socket.off('binaryBetCount');
-      socket.off('binaryLeaderboard');
       socket.off('playerEliminated');
-      socket.off('binaryCancelled');
+      socket.off('binaryRoundCancelled');
+      socket.off('betTimer');
       socket.off('countdown');
     };
   }, []);
@@ -159,12 +130,12 @@ export default function TVBinaryPage() {
     ? `${window.location.origin}/play-binary?room=${roomCode}`
     : '';
 
-  const totalPlayers = binaryLeaderboard.length || playerNames.length;
+  const totalPlayers = leaderboard.length || playerNames.length;
   const entryPrice = binaryRound?.entryPrice ?? 0;
   const ticker = binaryRound?.ticker ?? gameState.ticker ?? '';
   const roundNumber = binaryRound?.roundNumber ?? gameState.roundNumber ?? 0;
-  const maxRounds = binaryRound?.maxRounds ?? 20;
-  const totalCandles = 5;
+  const maxRounds = binaryRound?.totalRounds ?? BINARY_MAX_ROUNDS;
+  const totalCandles = binaryRound?.candleTarget ?? 5;
 
   // --- LOBBY ---
   if (phase === 'lobby') {
@@ -236,8 +207,6 @@ export default function TVBinaryPage() {
 
   // --- BINARY BETTING ---
   if (phase === 'binary_betting') {
-    const timer = binaryRound ? Math.max(0, 5 - (binaryRound.candlesRevealed || 0)) : countdown;
-
     return (
       <div className="h-screen bg-background flex flex-col text-white">
         {/* Cancelled alert */}
@@ -280,10 +249,7 @@ export default function TVBinaryPage() {
           <div className="w-[400px] border-l border-border p-6 overflow-y-auto flex flex-col">
             <h3 className="text-text-secondary text-xl font-display font-bold mb-5 uppercase tracking-wider">Лидерборд</h3>
             <div className="space-y-2 flex-1">
-              {binaryLeaderboard.map((entry, i) => (
-                <BinaryLeaderboardRow key={entry.nickname} entry={entry} rank={i + 1} />
-              ))}
-              {binaryLeaderboard.length === 0 && leaderboard.map((entry, i) => (
+              {leaderboard.map((entry, i) => (
                 <div key={entry.nickname} className="flex items-center gap-3 rounded-xl px-4 py-2.5 glass">
                   <span className="font-bold text-xl w-8 text-center text-text-muted">{i + 1}</span>
                   <p className="text-white font-semibold text-lg truncate flex-1">{entry.nickname}</p>
@@ -292,19 +258,13 @@ export default function TVBinaryPage() {
               ))}
             </div>
 
-            {/* Bet counter */}
+            {/* Player count */}
             <div className="mt-4 pt-4 border-t border-border">
               <div className="flex items-center justify-between">
-                <span className="text-text-secondary text-lg">Ставки:</span>
+                <span className="text-text-secondary text-lg">Игроки:</span>
                 <span className="text-accent-gold text-xl font-mono font-bold">
-                  {betCount}/{totalPlayers} сделали
+                  {totalPlayers}
                 </span>
-              </div>
-              <div className="mt-2 h-2 bg-surface-light rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-accent-gold rounded-full transition-all duration-500"
-                  style={{ width: `${totalPlayers > 0 ? (betCount / totalPlayers) * 100 : 0}%` }}
-                />
               </div>
             </div>
           </div>
@@ -492,13 +452,13 @@ export default function TVBinaryPage() {
           <div className="w-[400px] border-l border-border p-6 overflow-y-auto relative z-10">
             <h3 className="text-text-secondary text-xl font-display font-bold mb-5 uppercase tracking-wider">Результаты</h3>
             <div className="space-y-2">
-              {resultData.payouts
-                .sort((a, b) => b.amount - a.amount)
+              {[...resultData.payouts]
+                .sort((a, b) => b.payout - a.payout)
                 .map(p => (
                   <div key={p.nickname} className="flex items-center justify-between glass rounded-xl px-4 py-3">
                     <span className="text-lg font-semibold text-white">{p.nickname}</span>
-                    <span className={`text-xl font-mono font-bold ${p.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                      {p.amount >= 0 ? '+' : ''}{p.amount.toLocaleString()}$
+                    <span className={`text-xl font-mono font-bold ${p.payout >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {p.payout >= 0 ? '+' : ''}{p.payout.toLocaleString()}$
                     </span>
                   </div>
                 ))}
@@ -513,7 +473,7 @@ export default function TVBinaryPage() {
   if (phase === 'finished') {
     const stats = finalStats.length > 0
       ? finalStats
-      : binaryLeaderboard.map((e, i) => ({
+      : leaderboard.map((e, i) => ({
           nickname: e.nickname, rank: i + 1, balance: e.balance,
           maxBalance: e.balance, worstTrade: 0, bestTrade: 0, totalTrades: 0, liquidations: 0,
           role: 'trader' as const,
@@ -678,24 +638,5 @@ function BinaryCandlestickChart({ candles, entryPrice }: { candles: Candle[]; en
         </>
       )}
     </svg>
-  );
-}
-
-function BinaryLeaderboardRow({ entry, rank }: { entry: BinaryLeaderboardEntry; rank: number }) {
-  const rankDisplay = rank === 1 ? <IconTrophy size={24} /> : rank === 2 ? <IconSilver size={24} /> : rank === 3 ? <IconBronze size={24} /> : `${rank}`;
-  const medalColors = ['text-accent-gold', 'text-text-secondary', 'text-amber-400'];
-  const rankColor = rank <= 3 ? medalColors[rank - 1] : 'text-text-muted';
-
-  return (
-    <div className={`flex items-center gap-3 rounded-xl px-4 py-2.5 glass ${entry.eliminated ? 'opacity-40' : ''}`}>
-      <span className={`font-bold text-xl w-8 text-center ${rankColor}`}>{rankDisplay}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-semibold text-lg truncate">{entry.nickname}</p>
-      </div>
-      <div className="text-right">
-        <p className="font-mono font-bold text-lg text-white">${entry.balance.toFixed(0)}</p>
-        {entry.eliminated && <p className="text-accent-red text-xs font-bold">ВЫБЫЛ</p>}
-      </div>
-    </div>
   );
 }
