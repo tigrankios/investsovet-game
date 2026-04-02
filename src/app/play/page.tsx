@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useClassicGame } from '@/lib/useClassicGame';
-import { getSocket } from '@/lib/useGame';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
-import type { MMLeverType } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
+
 import { formatPrice } from '@/lib/utils';
-import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
+import { IconLong, IconShort, IconChart, IconTrophy, IconSilver, IconBronze, IconFinish, IconDice, IconWheel, IconSlots, IconLootbox, IconLoto, IconSkillShield, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
 
 const RANDOM_NICKS = [
   'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
@@ -35,39 +34,6 @@ function PlayContent() {
     bonusResult, bonusData, skillAlert, finalStats,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   } = useClassicGame();
-
-  // MM-specific state (temporary until play-mm page is created)
-  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
-  const [mmLeverAlert, setMmLeverAlert] = useState('');
-  const [mmRentAlert, setMmRentAlert] = useState('');
-
-  useEffect(() => {
-    const socket = getSocket();
-    socket.on('mmLeverUsed', ({ lever, duration }: { lever: string; duration: number }) => {
-      const names: Record<string, string> = { commission: 'КОМИССИЯ x3', freeze: 'ЗАМОРОЗКА', squeeze: 'СЖАТИЕ' };
-      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
-      setTimeout(() => setMmLeverAlert(''), duration * 1000);
-    });
-    socket.on('mmRentTick', ({ amount }: { amount: number }) => {
-      setMmRentAlert(`-$${amount}`);
-      setTimeout(() => setMmRentAlert(''), 1500);
-    });
-    socket.on('mmInactivityPenalty', () => {
-      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
-      setTimeout(() => setMmLeverAlert(''), 3000);
-    });
-    socket.on('marketMakerResult', (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => setMmResult(data));
-    return () => {
-      socket.off('mmLeverUsed');
-      socket.off('mmRentTick');
-      socket.off('mmInactivityPenalty');
-      socket.off('marketMakerResult');
-    };
-  }, []);
-
-  const useMMLever = useCallback((lever: MMLeverType) => {
-    getSocket().emit('useMMLever', { lever });
-  }, []);
 
   // Reconnect: достаём данные из sessionStorage
   const [joined, setJoined] = useState(false);
@@ -240,17 +206,10 @@ function PlayContent() {
 
   // --- COUNTDOWN ---
   if (gameState.phase === 'countdown') {
-    const isMMMode = gameState.gameMode === 'market_maker';
-    const isMM = playerState?.role === 'market_maker';
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center">
         <p className="text-text-secondary text-lg">Раунд {gameState.roundNumber}</p>
         <p className="text-accent-gold text-xl">{gameState.ticker}</p>
-        {isMMMode && gameState.roundNumber === 1 && (
-          <div className={`mt-4 text-2xl font-display font-black animate-pulse ${isMM ? 'text-accent-gold' : 'text-text-primary'}`}>
-            {isMM ? '[MM] ТЫ МАРКЕТ-МЕЙКЕР!' : `[TR] ТЫ ТРЕЙДЕР vs ${gameState.marketMakerNickname}`}
-          </div>
-        )}
         <div className="text-[120px] font-display font-black text-accent-green animate-countdown leading-none mt-4" style={{ textShadow: '0 0 60px rgba(0,230,118,0.5)' }}>
           {countdown}
         </div>
@@ -300,16 +259,6 @@ function PlayContent() {
         {skillAlert && (
           <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-accent-purple text-white font-bold rounded-lg px-4 py-2 z-50 animate-alert">
             {skillAlert}
-          </div>
-        )}
-        {mmLeverAlert && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent-gold text-black font-bold rounded-lg px-4 py-2 z-50 animate-alert">
-            {mmLeverAlert}
-          </div>
-        )}
-        {mmRentAlert && playerState?.role === 'trader' && gameState.gameMode === 'market_maker' && (
-          <div className="absolute top-2 right-4 text-accent-red font-mono font-bold text-sm z-50 animate-ping">
-            {mmRentAlert}
           </div>
         )}
 
@@ -401,109 +350,10 @@ function PlayContent() {
           </div>
         )}
 
-        {/* Market Maker Dashboard */}
-        {playerState.role === 'market_maker' && gameState.gameMode === 'market_maker' && (
-          <div className="flex-1 flex flex-col mx-4 mt-2">
-            {/* MM Balance */}
-            <div className="text-center mb-3">
-              <p className="text-text-secondary text-xs uppercase">MM Баланс</p>
-              <p className="text-3xl font-mono font-bold text-accent-gold">${playerState.balance.toFixed(0)}</p>
-            </div>
 
-            {/* Lever Buttons */}
-            <div className="space-y-2 mb-3">
-              {(['commission', 'freeze', 'squeeze'] as const).map((lever) => {
-                const leverState = gameState.mmLevers?.[lever];
-                const isActive = leverState?.active || false;
-                const cooldown = leverState?.cooldownLeft || 0;
-                const canUse = !isActive && cooldown <= 0;
-                const configs = {
-                  commission: { label: 'КОМИССИЯ x3', color: 'bg-accent-red', desc: '3% fee на сделки' },
-                  freeze: { label: 'ЗАМОРОЗКА', color: 'bg-blue-600', desc: 'Блокирует закрытие' },
-                  squeeze: { label: 'СЖАТИЕ', color: 'bg-accent-gold', desc: 'Ликвидация ближе' },
-                } as const;
-                const cfg = configs[lever];
-                return (
-                  <button
-                    key={lever}
-                    onClick={() => useMMLever(lever)}
-                    disabled={!canUse}
-                    className={`w-full py-4 rounded-xl font-bold text-lg active:scale-95 transition-all ${
-                      isActive ? `${cfg.color} text-white animate-pulse` :
-                      canUse ? `${cfg.color} text-white` :
-                      'bg-surface-light text-text-muted'
-                    } disabled:opacity-40`}
-                  >
-                    <div>{cfg.label}</div>
-                    <div className="text-xs font-normal opacity-80">
-                      {isActive ? `Активно (${leverState?.ticksLeft}s)` :
-                       cooldown > 0 ? `Кулдаун (${cooldown}s)` :
-                       cfg.desc}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Trader Positions Dashboard */}
-            <div className="flex-1 overflow-y-auto space-y-2">
-              <p className="text-text-secondary text-xs uppercase mb-1">Позиции трейдеров</p>
-              {leaderboard.filter((e) => e.role === 'trader').map((entry) => (
-                <div key={entry.nickname} className={`rounded-lg p-2 text-sm border ${
-                  entry.hasPosition
-                    ? entry.totalPnl >= 0 ? 'bg-accent-green/10 border-accent-green/30' : 'bg-accent-red/10 border-accent-red/30'
-                    : 'bg-surface-light border-border'
-                }`}>
-                  <div className="flex justify-between">
-                    <span className="font-bold">{entry.nickname}</span>
-                    <span className="font-mono">${entry.balance.toFixed(0)}</span>
-                  </div>
-                  {entry.hasPosition && (
-                    <div className="flex justify-between text-xs mt-1 text-text-secondary">
-                      <span className={entry.positionDirection === 'long' ? 'text-accent-green' : 'text-accent-red'}>
-                        {entry.positionDirection?.toUpperCase()} x{entry.positionLeverage}
-                      </span>
-                      <span>
-                        ${entry.positionSize} | Liq: {entry.liquidationPrice?.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Trader: MM indicator */}
-        {playerState.role === 'trader' && gameState.gameMode === 'market_maker' && gameState.marketMakerNickname && (
-          <div className="mx-4 mt-2 text-center">
-            <span className="text-accent-gold/70 text-xs">vs Маркет-Мейкер: {gameState.marketMakerNickname}</span>
-          </div>
-        )}
-
-        {/* Active MM effects for traders */}
-        {playerState.role === 'trader' && gameState.gameMode === 'market_maker' && gameState.mmLevers && (
-          <div className="mx-4 mt-1 space-y-1">
-            {gameState.mmLevers.commission.active && (
-              <div className="bg-accent-red/20 border border-accent-red/50 rounded-lg px-3 py-1 text-accent-red text-xs font-bold text-center animate-pulse">
-                КОМИССИЯ x3 — 3% fee! ({gameState.mmLevers.commission.ticksLeft}s)
-              </div>
-            )}
-            {gameState.mmLevers.freeze.active && (
-              <div className="bg-blue-600/20 border border-blue-500/50 rounded-lg px-3 py-1 text-blue-400 text-xs font-bold text-center animate-pulse">
-                ЗАМОРОЗКА — Нельзя закрыть! ({gameState.mmLevers.freeze.ticksLeft}s)
-              </div>
-            )}
-            {gameState.mmLevers.squeeze.active && (
-              <div className="bg-accent-gold/20 border border-accent-gold/50 rounded-lg px-3 py-1 text-accent-gold text-xs font-bold text-center animate-pulse">
-                СЖАТИЕ — Ликвидация ближе! ({gameState.mmLevers.squeeze.ticksLeft}s)
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Skill Button (only for traders) */}
-        {playerState.role !== 'market_maker' && playerState.skill && !playerState.skillUsed && (
+        {playerState.skill && !playerState.skillUsed && (
           <div className="mx-4 mt-3">
             <button
               onClick={usePlayerSkill}
@@ -524,7 +374,7 @@ function PlayContent() {
             </button>
           </div>
         )}
-        {playerState.role !== 'market_maker' && playerState.skill && playerState.skillUsed && (
+        {playerState.skill && playerState.skillUsed && (
           <div className="mx-4 mt-2">
             <div className="flex items-center gap-2 justify-center text-sm text-text-muted">
               <span className="inline-flex items-center gap-1">{SKILL_ICON_MAP[playerState.skill]?.({ size: 14 })} {SKILL_NAMES[playerState.skill]}</span>
@@ -538,14 +388,13 @@ function PlayContent() {
         <div className="flex-1" />
 
         {/* Frozen indicator */}
-        {playerState.role !== 'market_maker' && playerState.frozen && (
+        {playerState.frozen && (
           <div className="mx-4 mt-2 bg-blue-600/20 border border-blue-500/50 rounded-xl px-3 py-2 text-blue-400 text-sm font-bold text-center animate-pulse">
             🧊 Заморожен!
           </div>
         )}
 
         {/* Controls (traders only) */}
-        {playerState.role !== 'market_maker' && (
         <div className="px-4 pb-6 space-y-3">
           {position ? (
             <button
@@ -623,7 +472,6 @@ function PlayContent() {
             </>
           )}
         </div>
-        )}
       </div>
     );
   }
@@ -1003,34 +851,19 @@ function PlayContent() {
 
   // --- FINISHED ---
   if (gameState.phase === 'finished') {
-    const isMMMode = gameState.gameMode === 'market_maker';
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center p-4 overflow-y-auto">
         <div className="mt-6 mb-2"><IconFinish size={48} /></div>
-
-        {/* Market Maker Result */}
-        {isMMMode && mmResult && (
-          <div className={`w-full max-w-md mb-4 rounded-xl p-4 text-center border ${mmResult.mmWon ? 'bg-accent-gold/10 border-accent-gold/50' : 'bg-accent-green/10 border-accent-green/50'}`}>
-            <p className="text-xl font-black mb-2 flex items-center justify-center gap-1">
-              {mmResult.mmWon ? <><IconCrown size={16} /> МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!</> : 'ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
-            </p>
-            <p className="text-sm text-text-secondary flex items-center justify-center gap-1">
-              <IconCrown size={14} /> {mmResult.mmNickname}: ${mmResult.mmBalance.toFixed(0)} vs Трейдеры: ${mmResult.tradersAvg.toFixed(0)}
-            </p>
-          </div>
-        )}
 
         <h2 className="text-2xl font-display font-black text-accent-gold mb-4">ИГРА ОКОНЧЕНА</h2>
 
         {finalStats.length > 0 ? (
           <div className="w-full max-w-md space-y-3 mb-6">
-            {finalStats.map((s) => {
-              const isMM = isMMMode && s.role === 'market_maker';
-              return (
-              <div key={s.nickname} className={`rounded-xl p-4 ${isMM ? 'bg-accent-gold/10 border border-accent-gold/30' : s.rank === 1 ? 'bg-accent-gold/10 border border-accent-gold/30' : 'glass border border-border'}`}>
+            {finalStats.map((s) => (
+              <div key={s.nickname} className={`rounded-xl p-4 ${s.rank === 1 ? 'bg-accent-gold/10 border border-accent-gold/30' : 'glass border border-border'}`}>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xl font-bold flex items-center gap-1">
-                    {s.rank === 1 ? <IconTrophy size={24} /> : s.rank === 2 ? <IconSilver size={24} /> : s.rank === 3 ? <IconBronze size={24} /> : `${s.rank}.`} {isMM ? <IconCrown size={16} /> : null}{s.nickname}
+                    {s.rank === 1 ? <IconTrophy size={24} /> : s.rank === 2 ? <IconSilver size={24} /> : s.rank === 3 ? <IconBronze size={24} /> : `${s.rank}.`} {s.nickname}
                   </span>
                   <span className="text-xl font-mono font-bold text-accent-gold">${s.balance.toFixed(0)}</span>
                 </div>
@@ -1047,8 +880,7 @@ function PlayContent() {
                   <span className="text-right font-mono text-accent-red">{s.liquidations}</span>
                 </div>
               </div>
-            );
-            })}
+            ))}
           </div>
         ) : playerState && (
           <p className="text-2xl font-bold mt-4 mb-6">${playerState.balance.toFixed(0)}</p>

@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useGame, getSocket } from '@/lib/useGame';
+import { useEffect, useRef } from 'react';
+import { useGame } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import { BONUS_TITLES } from '@/lib/types';
-import type { Candle, LeaderboardEntry, GameMode } from '@/lib/types';
+import type { Candle, LeaderboardEntry } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
-import { IconChart, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, BONUS_ICON_MAP } from '@/components/icons';
+import { IconTrophy, IconSilver, IconBronze, BONUS_ICON_MAP } from '@/components/icons';
 
 // Эпичная музыка — бесплатные треки
 const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3'; // epic cinematic
@@ -17,37 +17,7 @@ export default function TVPage() {
     voteData, liquidationAlert, bonusData, finalStats,
     createRoom, startGame,
   } = useGame();
-
-  // MM-specific state (temporary until tv-mm page is created)
-  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
-  const [mmLeverAlert, setMmLeverAlert] = useState('');
-  const [mmRentAlert, setMmRentAlert] = useState('');
-
-  useEffect(() => {
-    const socket = getSocket();
-    socket.on('mmLeverUsed', ({ lever, duration }: { lever: string; duration: number }) => {
-      const names: Record<string, string> = { commission: 'КОМИССИЯ x3', freeze: 'ЗАМОРОЗКА', squeeze: 'СЖАТИЕ' };
-      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
-      setTimeout(() => setMmLeverAlert(''), duration * 1000);
-    });
-    socket.on('mmRentTick', ({ amount }: { amount: number }) => {
-      setMmRentAlert(`-$${amount}`);
-      setTimeout(() => setMmRentAlert(''), 1500);
-    });
-    socket.on('mmInactivityPenalty', () => {
-      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
-      setTimeout(() => setMmLeverAlert(''), 3000);
-    });
-    socket.on('marketMakerResult', (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => setMmResult(data));
-    return () => {
-      socket.off('mmLeverUsed');
-      socket.off('mmRentTick');
-      socket.off('mmInactivityPenalty');
-      socket.off('marketMakerResult');
-    };
-  }, []);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [modeSelected, setModeSelected] = useState(false);
 
   // Музыка
   useEffect(() => {
@@ -66,49 +36,12 @@ export default function TVPage() {
     }
   }, [gameState?.phase]);
 
-  // --- MODE SELECTION ---
-  if (!modeSelected || !gameState) {
-    const selectMode = (mode: GameMode) => {
-      setModeSelected(true);
-      createRoom(mode);
-    };
-
-    if (gameState) {
-      // Already created, skip selection
-    } else {
-      return (
-        <div className="h-screen bg-background text-white flex flex-col items-center justify-center">
-          <h1 className="text-7xl font-display font-black tracking-tight mb-2">
-            <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
-            <span className="font-display text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
-          </h1>
-          <p className="text-text-secondary text-xl mb-16">Trading Arena</p>
-
-          <h2 className="text-3xl font-bold text-text-primary mb-8">ВЫБЕРИ РЕЖИМ</h2>
-
-          <div className="flex gap-8">
-            <button
-              onClick={() => selectMode('classic')}
-              className="group glass-strong border-2 border-accent-green/50 rounded-2xl p-8 w-72 text-center hover:border-accent-green hover:bg-surface-light transition-all hover:scale-105 active:scale-95"
-            >
-              <div className="mb-4"><IconChart size={48} /></div>
-              <h3 className="text-2xl font-display font-black text-accent-green mb-2">КЛАССИЧЕСКИЙ</h3>
-              <p className="text-text-secondary">Все против всех. Торгуй, используй скиллы, доминируй.</p>
-            </button>
-
-            <button
-              onClick={() => selectMode('market_maker')}
-              className="group glass-strong border-2 border-accent-gold/50 rounded-2xl p-8 w-72 text-center hover:border-accent-gold hover:bg-surface-light transition-all hover:scale-105 active:scale-95"
-            >
-              <div className="mb-4"><IconCrown size={48} /></div>
-              <h3 className="text-2xl font-display font-black text-accent-gold mb-2">МАРКЕТ-МЕЙКЕР</h3>
-              <p className="text-text-secondary">Один игрок управляет рынком. Остальные — против него.</p>
-            </button>
-          </div>
-        </div>
-      );
+  // Auto-create classic room
+  useEffect(() => {
+    if (!gameState) {
+      createRoom('classic');
     }
-  }
+  }, [gameState, createRoom]);
 
   if (!gameState) {
     return (
@@ -119,7 +52,6 @@ export default function TVPage() {
   }
 
   const { phase, roomCode, ticker, playerNames } = gameState;
-  const isMMMode = gameState.gameMode === 'market_maker';
   const joinUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/play?room=${roomCode}`
     : '';
@@ -133,9 +65,7 @@ export default function TVPage() {
             <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
             <span className="font-display text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
           </h1>
-          <p className="text-text-secondary text-xl mt-2">
-            {isMMMode ? <span className="inline-flex items-center gap-1"><IconCrown size={16} /> Режим: Маркет-Мейкер</span> : 'Trading Arena'}
-          </p>
+          <p className="text-text-secondary text-xl mt-2">Trading Arena</p>
         </header>
 
         <div className="flex-1 flex items-center justify-center gap-16 px-8">
@@ -159,9 +89,6 @@ export default function TVPage() {
                   </li>
                 ))}
               </ul>
-            )}
-            {isMMMode && playerNames.length > 0 && (
-              <p className="text-accent-gold/70 text-sm mt-4">Случайный игрок станет Маркет-Мейкером</p>
             )}
           </div>
         </div>
@@ -188,11 +115,6 @@ export default function TVPage() {
       <div className="h-screen bg-background flex flex-col items-center justify-center">
         <p className="text-text-secondary text-3xl mb-2">Раунд {gameState.roundNumber}</p>
         <p className="text-accent-gold text-2xl mb-4">{ticker}</p>
-        {isMMMode && gameState.marketMakerNickname && (
-          <p className="text-accent-gold text-3xl font-bold mb-4 animate-pulse flex items-center justify-center gap-2">
-            <IconCrown size={20} /> МАРКЕТ-МЕЙКЕР: {gameState.marketMakerNickname}
-          </p>
-        )}
         <div className="text-[200px] font-display font-black text-accent-green animate-countdown leading-none" style={{ textShadow: '0 0 80px rgba(0,230,118,0.5)' }}>
           {countdown}
         </div>
@@ -211,13 +133,6 @@ export default function TVPage() {
           </div>
         )}
 
-        {/* MM Lever алерт */}
-        {mmLeverAlert && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent-gold text-black font-bold text-2xl px-8 py-3 rounded-xl z-50 animate-alert">
-            {mmLeverAlert}
-          </div>
-        )}
-
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border">
           <div className="flex items-center gap-4">
@@ -226,39 +141,10 @@ export default function TVPage() {
             <PriceDisplay price={currentPrice} candles={candles} />
           </div>
           <div className="flex items-center gap-2">
-            {isMMMode && (
-              <span className="text-accent-gold text-sm font-mono font-bold mr-3">
-                ${gameState.mmBalance.toFixed(0)}
-              </span>
-            )}
-            {isMMMode && (
-              <span className="text-accent-gold text-sm font-bold mr-3 inline-flex items-center gap-1"><IconCrown size={14} /> MM: {gameState.marketMakerNickname}</span>
-            )}
             <span className="w-2 h-2 bg-accent-green rounded-full animate-pulse" />
             <span className="text-text-secondary text-sm">LIVE</span>
           </div>
         </div>
-
-        {/* MM Active Effects */}
-        {isMMMode && gameState.mmLevers && (
-          <div className="flex gap-2 px-6 py-1">
-            {gameState.mmLevers.commission.active && (
-              <span className="bg-accent-red/20 border border-accent-red/50 rounded px-3 py-1 text-accent-red text-sm font-bold animate-pulse">
-                КОМИССИЯ x3 ({gameState.mmLevers.commission.ticksLeft}s)
-              </span>
-            )}
-            {gameState.mmLevers.freeze.active && (
-              <span className="bg-blue-600/20 border border-blue-500/50 rounded px-3 py-1 text-blue-400 text-sm font-bold animate-pulse">
-                ЗАМОРОЗКА ({gameState.mmLevers.freeze.ticksLeft}s)
-              </span>
-            )}
-            {gameState.mmLevers.squeeze.active && (
-              <span className="bg-accent-gold/20 border border-accent-gold/50 rounded px-3 py-1 text-accent-gold text-sm font-bold animate-pulse">
-                СЖАТИЕ ({gameState.mmLevers.squeeze.ticksLeft}s)
-              </span>
-            )}
-          </div>
-        )}
 
         {/* Chart + Leaderboard */}
         <div className="flex-1 flex">
@@ -275,7 +161,7 @@ export default function TVPage() {
             <h3 className="text-text-secondary text-xl font-display font-bold mb-5 uppercase tracking-wider">Лидерборд</h3>
             <div className="space-y-3">
               {leaderboard.map((entry, i) => (
-                <LeaderboardRow key={entry.nickname} entry={entry} rank={i + 1} isMMMode={isMMMode} />
+                <LeaderboardRow key={entry.nickname} entry={entry} rank={i + 1} />
               ))}
             </div>
           </div>
@@ -391,30 +277,9 @@ export default function TVPage() {
     const stats = finalStats.length > 0 ? finalStats : leaderboard.map((e, i) => ({
       nickname: e.nickname, rank: i + 1, balance: e.balance,
       maxBalance: e.balance, worstTrade: 0, bestTrade: 0, totalTrades: 0, liquidations: 0,
-      role: e.role,
     }));
     return (
       <div className="h-screen bg-background text-white flex flex-col items-center justify-center overflow-y-auto">
-        {/* Market Maker Result */}
-        {isMMMode && mmResult && (
-          <div className={`w-full max-w-3xl mb-6 mt-4 rounded-2xl p-6 text-center border-2 ${mmResult.mmWon ? 'bg-accent-gold/10 border-accent-gold/50' : 'bg-accent-green/10 border-accent-green/50'}`}>
-            <h2 className="text-4xl font-display font-black mb-3 flex items-center justify-center gap-2">
-              {mmResult.mmWon ? <><IconCrown size={24} /> МАРКЕТ-МЕЙКЕР ПОБЕДИЛ!</> : 'ТРЕЙДЕРЫ ПОБЕДИЛИ!'}
-            </h2>
-            <div className="flex justify-center gap-12 text-xl">
-              <div>
-                <span className="text-accent-gold font-bold inline-flex items-center gap-1"><IconCrown size={14} /> {mmResult.mmNickname}</span>
-                <span className="font-mono ml-2">${mmResult.mmBalance.toFixed(0)}</span>
-              </div>
-              <span className="text-text-secondary">vs</span>
-              <div>
-                <span className="text-accent-green font-bold">Трейдеры (avg)</span>
-                <span className="font-mono ml-2">${mmResult.tradersAvg.toFixed(0)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         <h1 className="text-6xl font-display font-black text-accent-gold mb-6">ИГРА ОКОНЧЕНА</h1>
 
         <div className="w-full max-w-3xl px-4">
@@ -432,14 +297,10 @@ export default function TVPage() {
               </tr>
             </thead>
             <tbody>
-              {stats.map((s) => {
-                const isMM = isMMMode && s.role === 'market_maker';
-                return (
-                  <tr key={s.nickname} className={`border-t border-border ${s.rank === 1 ? 'text-accent-gold text-xl' : 'text-lg'} ${isMM ? 'bg-accent-gold/5' : ''}`}>
+              {stats.map((s) => (
+                  <tr key={s.nickname} className={`border-t border-border ${s.rank === 1 ? 'text-accent-gold text-xl' : 'text-lg'}`}>
                     <td className="py-4 font-bold">{s.rank === 1 ? <IconTrophy size={24} /> : s.rank === 2 ? <IconSilver size={24} /> : s.rank === 3 ? <IconBronze size={24} /> : s.rank}</td>
-                    <td className="py-4 font-bold">
-                      <span className="inline-flex items-center gap-1">{isMM && <IconCrown size={14} />}{s.nickname}</span>
-                    </td>
+                    <td className="py-4 font-bold">{s.nickname}</td>
                     <td className="py-4 text-right font-mono font-bold">${s.balance.toFixed(0)}</td>
                     <td className="py-4 text-right font-mono text-accent-green">${s.maxBalance.toFixed(0)}</td>
                     <td className="py-4 text-right font-mono text-accent-green">+{s.bestTrade.toFixed(0)}</td>
@@ -447,8 +308,7 @@ export default function TVPage() {
                     <td className="py-4 text-right font-mono">{s.totalTrades}</td>
                     <td className="py-4 text-right font-mono text-accent-red">{s.liquidations}</td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
@@ -582,18 +442,16 @@ function CandlestickChart({ candles, positions = [] }: { candles: Candle[]; posi
   );
 }
 
-function LeaderboardRow({ entry, rank, isMMMode = false }: { entry: LeaderboardEntry; rank: number; isMMMode?: boolean }) {
+function LeaderboardRow({ entry, rank }: { entry: LeaderboardEntry; rank: number }) {
   const rankDisplay = rank === 1 ? <IconTrophy size={24} /> : rank === 2 ? <IconSilver size={24} /> : rank === 3 ? <IconBronze size={24} /> : `${rank}`;
   const medalColors = ['text-accent-gold', 'text-text-secondary', 'text-amber-400'];
   const rankColor = rank <= 3 ? medalColors[rank - 1] : 'text-text-muted';
-  const isMM = isMMMode && entry.role === 'market_maker';
 
   return (
-    <div className={`flex items-center gap-4 rounded-xl px-5 py-3 ${isMM ? 'bg-accent-gold/10 border border-accent-gold/30' : 'glass'}`}>
+    <div className="flex items-center gap-4 rounded-xl px-5 py-3 glass">
       <span className={`font-bold text-2xl w-10 text-center ${rankColor}`}>{rankDisplay}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          {isMM && <IconCrown size={16} />}
           <p className="text-white font-semibold text-xl truncate">{entry.nickname}</p>
           {entry.hasPosition && (
             <span className={`text-sm px-2 py-0.5 rounded font-bold ${entry.positionDirection === 'long' ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-red/20 text-accent-red'}`}>
