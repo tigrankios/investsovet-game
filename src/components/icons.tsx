@@ -131,10 +131,11 @@ export function IconSlots({ size = 32, color = '#FFD740' }: { size?: number; col
       <rect x="3" y="6" width="26" height="20" rx="3" stroke={color} strokeWidth="2" />
       <line x1="12" y1="6" x2="12" y2="26" stroke={color} strokeWidth="1.5" />
       <line x1="20" y1="6" x2="20" y2="26" stroke={color} strokeWidth="1.5" />
-      <text x="7.5" y="19" fill={color} fontSize="10" fontWeight="bold" fontFamily="monospace">$</text>
-      <text x="15" y="19" fill={color} fontSize="10" fontWeight="bold" fontFamily="monospace">$</text>
-      <text x="23" y="19" fill={color} fontSize="10" fontWeight="bold" fontFamily="monospace">$</text>
-      <path d="M27 12H30V20H27" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Three diamonds instead of $ text */}
+      <path d="M7.5 16L9.5 13L11.5 16L9.5 19Z" fill={color} />
+      <path d="M15.5 16L17.5 13L19.5 16L17.5 19Z" fill={color} />
+      <path d="M23.5 16L25.5 13L27.5 16L25.5 19Z" fill={color} />
+      <path d="M29 13V19" stroke={color} strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

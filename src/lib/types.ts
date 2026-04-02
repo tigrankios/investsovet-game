@@ -132,7 +132,7 @@ export interface Candle {
 }
 
 // --- Slot Machine ---
-export const SLOT_SYMBOLS = ['₿', 'Ξ', 'D', 'R', 'G', 'M'] as const;
+export const SLOT_SYMBOLS = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'] as const;
 export type SlotSymbol = typeof SLOT_SYMBOLS[number];
 export interface SlotResult {
   reels: [SlotSymbol, SlotSymbol, SlotSymbol];

@@ -531,7 +531,7 @@ function PlayContent() {
     const timer = bonusData?.timer ?? gameState.bonusTimer;
     const bonusType = bonusData?.bonusType ?? gameState.bonusType;
 
-    const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', 'D', 'R', 'G', 'M'];
+    const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
 
     // --- Slots spin handler ---
     const handleSlotSpin = () => {
