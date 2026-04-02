@@ -5,7 +5,43 @@
 // --- Game Modes ---
 export type GameMode = 'classic' | 'market_maker';
 export type PlayerRole = 'trader' | 'market_maker';
-export const MM_INITIAL_BALANCE = 15000;
+
+export type MMLeverType = 'commission' | 'freeze' | 'squeeze';
+
+export interface MMLeverState {
+  commission: { active: boolean; ticksLeft: number; cooldownLeft: number };
+  freeze: { active: boolean; ticksLeft: number; cooldownLeft: number };
+  squeeze: { active: boolean; ticksLeft: number; cooldownLeft: number };
+}
+
+export interface MMCasinoState {
+  levers: MMLeverState;
+  lastLeverTime: number;
+  rentPausedTicksLeft: number;
+  traderLastOpenTime: Record<string, number>;
+}
+
+// MM Casino Mode Constants
+export const MM_STARTING_BALANCE = 0;
+export const MAX_POSITION_PERCENT = 30;
+export const RENT_AMOUNT = 100;
+export const RENT_INTERVAL_SEC = 5;
+export const COMMISSION_PERCENT = 3;
+export const COMMISSION_DURATION_SEC = 6;
+export const COMMISSION_COOLDOWN_SEC = 20;
+export const FREEZE_DURATION_SEC_MM = 5;
+export const FREEZE_COOLDOWN_SEC = 20;
+export const SQUEEZE_TIGHTENING_PERCENT = 30;
+export const SQUEEZE_DURATION_SEC = 8;
+export const SQUEEZE_COOLDOWN_SEC = 20;
+export const MM_LIQUIDATION_BONUS_PERCENT = 25;
+export const MM_INACTIVITY_THRESHOLD_SEC = 8;
+export const MM_INACTIVITY_RENT_PAUSE_SEC = 5;
+export const MM_INACTIVITY_TRADER_BONUS = 200;
+export const TRADER_INACTIVITY_THRESHOLD_SEC = 15;
+export const TRADER_INACTIVITY_RENT_MULTIPLIER = 2;
+export const SYNERGY_MIN_TRADERS = 3;
+export const SYNERGY_THRESHOLD_WIDENING_PERCENT = 30;
 
 // --- Skills (Mario Kart style) ---
 export type SkillType = 'trump_tweet' | 'inverse' | 'shield' | 'double_or_nothing' | 'freeze' | 'blind' | 'steal' | 'chaos';
@@ -218,7 +254,7 @@ export interface GameState {
   // Market Maker mode
   gameMode: GameMode;
   marketMakerId: string | null;
-  mmNextCandleModifier: number | null; // 0.5 or -0.5
+  mmCasino: MMCasinoState | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -233,6 +269,8 @@ export interface LeaderboardEntry {
   positionLeverage: Leverage | null;
   positionOpenedAt: number | null;
   positionEntryPrice: number | null;
+  positionSize: number | null;
+  liquidationPrice: number | null;
   role: PlayerRole;
 }
 
@@ -267,7 +305,9 @@ export interface ServerToClientEvents {
   voteUpdate: (data: { yes: number; no: number; total: number; timer: number }) => void;
   bonusResult: (result: BonusResult) => void;
   bonusUpdate: (data: { timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] }) => void;
-  mmPush: (data: { direction: 'up' | 'down' }) => void;
+  mmLeverUsed: (data: { lever: MMLeverType; duration: number }) => void;
+  mmRentTick: (data: { amount: number; mmBalance: number }) => void;
+  mmInactivityPenalty: () => void;
   marketMakerResult: (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => void;
   error: (message: string) => void;
 }
@@ -284,7 +324,7 @@ export interface ClientToServerEvents {
   openLootbox: (data: { bet: number; chosenIndex: number }) => void;
   playLoto: (data: { bet: number; numbers: number[] }) => void;
   voteNextRound: (data: { vote: boolean }) => void;
-  mmPush: (data: { direction: 'up' | 'down' }) => void;
+  useMMLever: (data: { lever: MMLeverType }) => void;
 }
 
 // --- Client-safe state (без скрытых данных) ---
@@ -308,6 +348,8 @@ export interface ClientGameState {
   // Market Maker mode
   gameMode: GameMode;
   marketMakerNickname: string | null;
+  mmLevers: MMLeverState | null;
+  mmBalance: number;
 }
 
 export interface ClientPlayerState {
@@ -321,6 +363,8 @@ export interface ClientPlayerState {
   freezeTicksLeft: number;
   blindTicksLeft: number;
   role: PlayerRole;
+  rentDrain: number;
+  isFreezed: boolean;
 }
 
 // --- Round Result ---
