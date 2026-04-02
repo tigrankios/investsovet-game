@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { LotoGame } from '@/components/games/LotoGame';
 
 const PAYOUTS: Record<number, number> = { 0: 0, 1: 0.5, 2: 1.5, 3: 3, 4: 10, 5: 50 };
 
@@ -16,40 +17,26 @@ function drawNumbers(): number[] {
 }
 
 export default function TestLoto() {
-  const [selected, setSelected] = useState<number[]>([]);
   const [drawn, setDrawn] = useState<number[] | null>(null);
+  const [playerNums, setPlayerNums] = useState<number[] | null>(null);
+  const [matches, setMatches] = useState<number | null>(null);
   const [balance, setBalance] = useState(10000);
   const [bet, setBet] = useState(1000);
-  const [playing, setPlaying] = useState(false);
+  const [key, setKey] = useState(0);
 
-  const toggle = (n: number) => {
-    if (drawn) return;
-    setSelected((prev) =>
-      prev.includes(n) ? prev.filter((x) => x !== n) : prev.length < 5 ? [...prev, n] : prev
-    );
-  };
-
-  const play = () => {
-    if (selected.length !== 5 || bet <= 0 || bet > balance) return;
-    setPlaying(true);
+  const play = (numbers: number[]) => {
     const d = drawNumbers();
-    setDrawn(d);
-
-    const matches = selected.filter((n) => d.includes(n)).length;
-    const mult = PAYOUTS[matches];
+    const m = numbers.filter((n) => d.includes(n)).length;
+    const mult = PAYOUTS[m];
     const win = mult === 0 ? -bet : Math.round(bet * mult - bet);
+    setDrawn(d);
+    setPlayerNums(numbers);
+    setMatches(m);
     setBalance((b) => Math.max(0, b + win));
-
-    setTimeout(() => setPlaying(false), 1000);
   };
 
-  const reset = () => {
-    setSelected([]);
-    setDrawn(null);
-  };
-
-  const matches = drawn ? selected.filter((n) => drawn.includes(n)).length : 0;
-  const mult = drawn ? PAYOUTS[matches] : null;
+  const mult = matches !== null ? PAYOUTS[matches] : null;
+  const win = mult !== null ? (mult === 0 ? -bet : Math.round(bet * mult - bet)) : null;
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center gap-4 p-6">
@@ -57,41 +44,21 @@ export default function TestLoto() {
       <h1 className="text-3xl font-display font-black text-accent-gold">ЛОТО</h1>
       <p className="text-text-secondary font-mono">Баланс: ${balance.toLocaleString()}</p>
 
-      <div className="grid grid-cols-5 gap-2 w-full max-w-xs">
-        {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
-          const isSel = selected.includes(n);
-          const isDrawn = drawn?.includes(n);
-          const isMatch = isDrawn && isSel;
-          const isPlayerOnly = !isDrawn && isSel && drawn;
-          return (
-            <button key={n} onClick={() => toggle(n)} disabled={!!drawn}
-              className={`h-12 rounded-lg font-bold text-lg transition-all active:scale-95 ${
-                drawn
-                  ? isMatch ? 'bg-accent-green text-white ring-2 ring-accent-green scale-110'
-                    : isDrawn ? 'bg-accent-gold text-black'
-                    : isPlayerOnly ? 'bg-accent-red/50 text-white'
-                    : 'bg-surface text-text-muted'
-                  : isSel ? 'bg-accent-gold text-black scale-105' : 'bg-surface-light text-text-primary hover:bg-surface'
-              }`}>
-              {n}
-            </button>
-          );
-        })}
-      </div>
+      <LotoGame key={key} onPlay={play} resultDrawn={drawn} resultPlayerNumbers={playerNums} resultMatches={matches} disabled={balance <= 0} />
 
-      {!drawn && <p className="text-text-secondary text-sm">Выбрано: {selected.length}/5</p>}
-
-      {drawn && (
+      {win !== null && mult !== null && (
         <div className="text-center">
-          <p className="text-text-secondary text-sm">Выпало: {drawn.join(', ')}</p>
-          <p className="text-white font-bold">Совпадений: {matches}/5</p>
-          <p className={`text-3xl font-display font-black ${mult && mult > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {mult && mult > 0 ? `x${mult}` : 'МИМО'}
-          </p>
-          <p className={`text-lg font-mono ${mult && mult > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {mult === 0 ? `-${bet}$` : `+${Math.round(bet * (mult ?? 0) - bet)}$`}
+          <p className={`text-lg font-mono ${win >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            {mult > 0 ? `x${mult} ` : ''}{win >= 0 ? '+' : ''}{win}$
           </p>
         </div>
+      )}
+
+      {drawn !== null && (
+        <button onClick={() => { setDrawn(null); setPlayerNums(null); setMatches(null); setKey((k) => k + 1); }}
+          className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 glow-gold">
+          ЕЩЁ РАЗ
+        </button>
       )}
 
       <div className="flex gap-2">
@@ -102,18 +69,6 @@ export default function TestLoto() {
           </button>
         ))}
       </div>
-
-      {!drawn ? (
-        <button onClick={play} disabled={selected.length !== 5 || balance <= 0}
-          className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 disabled:opacity-30 glow-gold">
-          ИГРАТЬ
-        </button>
-      ) : (
-        <button onClick={reset}
-          className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 glow-gold">
-          ЕЩЁ РАЗ
-        </button>
-      )}
     </div>
   );
 }

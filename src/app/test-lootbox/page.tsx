@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { LootboxGame } from '@/components/games/LootboxGame';
 
 const POOL = [
   { mult: 0, weight: 3 }, { mult: 0.5, weight: 2 }, { mult: 1.5, weight: 3 },
@@ -28,41 +29,23 @@ function generateBoxes(): number[] {
 
 export default function TestLootbox() {
   const [boxes, setBoxes] = useState<number[] | null>(null);
-  const [chosen, setChosen] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState([false, false, false, false]);
+  const [chosenIndex, setChosenIndex] = useState<number | null>(null);
   const [balance, setBalance] = useState(10000);
   const [bet, setBet] = useState(1000);
-  const [playing, setPlaying] = useState(false);
-
-  const startRound = () => {
-    setBoxes(generateBoxes());
-    setChosen(null);
-    setRevealed([false, false, false, false]);
-    setPlaying(true);
-  };
+  const [key, setKey] = useState(0);
 
   const choose = (idx: number) => {
-    if (chosen !== null || !boxes) return;
-    setChosen(idx);
-
-    // Reveal chosen
-    setRevealed((p) => { const n = [...p]; n[idx] = true; return n; });
-
-    // Calculate win
-    const mult = boxes[idx];
+    const generated = generateBoxes();
+    setBoxes(generated);
+    setChosenIndex(idx);
+    const mult = generated[idx];
     const win = mult === 0 ? -bet : Math.round(bet * mult - bet);
     setBalance((b) => Math.max(0, b + win));
-
-    // Reveal others after delay
-    const others = [0, 1, 2, 3].filter((i) => i !== idx);
-    others.forEach((i, delay) => {
-      setTimeout(() => {
-        setRevealed((p) => { const n = [...p]; n[i] = true; return n; });
-      }, 800 + delay * 300);
-    });
-
-    setTimeout(() => setPlaying(false), 2000);
   };
+
+  const win = boxes !== null && chosenIndex !== null
+    ? boxes[chosenIndex] === 0 ? -bet : Math.round(bet * boxes[chosenIndex] - bet)
+    : null;
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center gap-6 p-6">
@@ -70,62 +53,29 @@ export default function TestLootbox() {
       <h1 className="text-3xl font-display font-black text-accent-gold">ЛУТБОКС</h1>
       <p className="text-text-secondary font-mono">Баланс: ${balance.toLocaleString()}</p>
 
-      {boxes ? (
-        <>
-          <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-            {[0, 1, 2, 3].map((i) => {
-              const isRevealed = revealed[i];
-              const isChosen = chosen === i;
-              const val = boxes[i];
-              return (
-                <button key={i} onClick={() => choose(i)} disabled={chosen !== null}
-                  className={`h-28 rounded-xl font-black text-2xl transition-all active:scale-95 ${
-                    isRevealed
-                      ? isChosen
-                        ? val >= 2 ? 'bg-accent-green/80 ring-4 ring-accent-green' : 'bg-accent-red/80 ring-4 ring-accent-red'
-                        : 'bg-surface-light opacity-60'
-                      : 'bg-gradient-to-br from-accent-gold to-amber-600 hover:scale-105'
-                  }`}>
-                  {isRevealed ? (val === 0 ? 'BUST' : `x${val}`) : '?'}
-                </button>
-              );
-            })}
-          </div>
+      <LootboxGame key={key} onChoose={choose} resultBoxes={boxes} resultChosenIndex={chosenIndex} disabled={balance <= 0} />
 
-          {chosen !== null && (
-            <div className="text-center">
-              <p className={`text-3xl font-display font-black ${boxes[chosen] >= 2 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {boxes[chosen] === 0 ? 'BUST' : `x${boxes[chosen]}`}
-              </p>
-              <p className={`text-lg font-mono ${boxes[chosen] > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {boxes[chosen] === 0 ? `-${bet}$` : `+${Math.round(bet * boxes[chosen] - bet)}$`}
-              </p>
-            </div>
-          )}
-
-          {!playing && (
-            <button onClick={startRound} className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 glow-gold">
-              ЕЩЁ РАЗ
-            </button>
-          )}
-        </>
-      ) : (
-        <>
-          <p className="text-text-secondary">Выбери одну из 4 коробок. Остальные откроются после.</p>
-          <div className="flex gap-2">
-            {[500, 1000, 2500, 5000].map((b) => (
-              <button key={b} onClick={() => setBet(b)}
-                className={`px-4 py-2 rounded-lg font-bold text-sm ${bet === b ? 'bg-accent-gold text-black' : 'bg-surface border border-border text-text-secondary'}`}>
-                ${b}
-              </button>
-            ))}
-          </div>
-          <button onClick={startRound} disabled={balance <= 0}
-            className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 disabled:opacity-30 glow-gold">
-            ОТКРЫТЬ
-          </button>
-        </>
+      {win !== null && (
+        <p className={`text-lg font-mono ${win >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          {win >= 0 ? '+' : ''}{win}$
+        </p>
       )}
+
+      {boxes !== null && (
+        <button onClick={() => { setBoxes(null); setChosenIndex(null); setKey((k) => k + 1); }}
+          className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 glow-gold">
+          ЕЩЁ РАЗ
+        </button>
+      )}
+
+      <div className="flex gap-2">
+        {[500, 1000, 2500, 5000].map((b) => (
+          <button key={b} onClick={() => setBet(b)}
+            className={`px-4 py-2 rounded-lg font-bold text-sm ${bet === b ? 'bg-accent-gold text-black' : 'bg-surface border border-border text-text-secondary'}`}>
+            ${b}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

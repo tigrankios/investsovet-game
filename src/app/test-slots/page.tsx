@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { SlotsGame } from '@/components/games/SlotsGame';
 
 const SYMBOLS = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
 
@@ -16,41 +17,24 @@ function getMultiplier(reels: string[]): number {
 }
 
 export default function TestSlots() {
-  const [reels, setReels] = useState(['?', '?', '?']);
-  const [spinning, setSpinning] = useState(false);
-  const [result, setResult] = useState<{ mult: number; win: number } | null>(null);
+  const [resultReels, setResultReels] = useState<string[] | null>(null);
+  const [resultMult, setResultMult] = useState<number | null>(null);
   const [balance, setBalance] = useState(10000);
   const [bet, setBet] = useState(1000);
+  const [key, setKey] = useState(0);
 
   const spin = () => {
-    if (spinning || bet <= 0 || bet > balance) return;
-    setSpinning(true);
-    setResult(null);
-
-    let ticks = 0;
-    const interval = setInterval(() => {
-      setReels([
-        SYMBOLS[Math.floor(Math.random() * 6)],
-        SYMBOLS[Math.floor(Math.random() * 6)],
-        SYMBOLS[Math.floor(Math.random() * 6)],
-      ]);
-      ticks++;
-      if (ticks >= 20) {
-        clearInterval(interval);
-        const final = [
-          SYMBOLS[Math.floor(Math.random() * 6)],
-          SYMBOLS[Math.floor(Math.random() * 6)],
-          SYMBOLS[Math.floor(Math.random() * 6)],
-        ];
-        setReels(final);
-        const mult = getMultiplier(final);
-        const win = mult === 0 ? -bet : Math.round(bet * mult - bet);
-        setResult({ mult, win });
-        setBalance((b) => Math.max(0, b + win));
-        setSpinning(false);
-      }
-    }, 80);
+    const reels = [SYMBOLS[Math.floor(Math.random() * 6)], SYMBOLS[Math.floor(Math.random() * 6)], SYMBOLS[Math.floor(Math.random() * 6)]];
+    const mult = getMultiplier(reels);
+    const win = mult === 0 ? -bet : Math.round(bet * mult - bet);
+    setResultReels(reels);
+    setResultMult(mult);
+    setBalance((b) => Math.max(0, b + win));
   };
+
+  const win = resultMult !== null
+    ? resultMult === 0 ? -bet : Math.round(bet * resultMult - bet)
+    : null;
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center gap-6 p-6">
@@ -58,26 +42,19 @@ export default function TestSlots() {
       <h1 className="text-3xl font-display font-black text-accent-gold">СЛОТ-МАШИНА</h1>
       <p className="text-text-secondary font-mono">Баланс: ${balance.toLocaleString()}</p>
 
-      <div className="flex gap-4">
-        {reels.map((sym, i) => (
-          <div key={i} className={`w-24 h-24 bg-surface border-2 rounded-xl flex items-center justify-center text-5xl transition-all ${
-            spinning ? 'border-accent-gold animate-pulse' : result && result.mult > 0 ? 'border-accent-green glow-green' : 'border-border-light'
-          }`}>
-            {sym}
-          </div>
-        ))}
-      </div>
+      <SlotsGame key={key} onSpin={spin} resultReels={resultReels} resultMultiplier={resultMult} disabled={balance <= 0} />
 
-      {result && (
-        <div className="text-center">
-          <p className={`text-3xl font-display font-black ${result.mult > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {result.mult > 0 ? `x${result.mult}` : 'МИМО'}
-          </p>
-          <p className={`text-lg font-mono ${result.win >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {result.win >= 0 ? '+' : ''}{result.win}$
-          </p>
-          {result.mult >= 5 && <p className="text-accent-gold font-display font-black text-lg animate-bounce mt-1">JACKPOT!</p>}
-        </div>
+      {win !== null && (
+        <p className={`text-lg font-mono ${win >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          {win >= 0 ? '+' : ''}{win}$
+        </p>
+      )}
+
+      {resultReels !== null && (
+        <button onClick={() => { setResultReels(null); setResultMult(null); setKey((k) => k + 1); }}
+          className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 glow-gold">
+          ЕЩЁ РАЗ
+        </button>
       )}
 
       <div className="flex gap-2">
@@ -88,11 +65,6 @@ export default function TestSlots() {
           </button>
         ))}
       </div>
-
-      <button onClick={spin} disabled={spinning || balance <= 0}
-        className="bg-accent-gold text-black font-display font-black text-xl px-12 py-4 rounded-xl active:scale-95 transition-all disabled:opacity-30 glow-gold">
-        КРУТИТЬ
-      </button>
     </div>
   );
 }
