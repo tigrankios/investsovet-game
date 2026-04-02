@@ -5,16 +5,24 @@ import {
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
   SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION, BLIND_DURATION,
-  INITIAL_BALANCE, MM_STARTING_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
+  INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
+  MMLeverType, MMLeverState, MMCasinoState,
+  MM_STARTING_BALANCE, MAX_POSITION_PERCENT, RENT_AMOUNT, RENT_INTERVAL_SEC,
+  COMMISSION_PERCENT, COMMISSION_DURATION_SEC, COMMISSION_COOLDOWN_SEC,
+  FREEZE_DURATION_SEC_MM, FREEZE_COOLDOWN_SEC,
+  SQUEEZE_TIGHTENING_PERCENT, SQUEEZE_DURATION_SEC, SQUEEZE_COOLDOWN_SEC,
+  MM_LIQUIDATION_BONUS_PERCENT, MM_INACTIVITY_THRESHOLD_SEC, MM_INACTIVITY_RENT_PAUSE_SEC,
+  MM_INACTIVITY_TRADER_BONUS, TRADER_INACTIVITY_THRESHOLD_SEC, TRADER_INACTIVITY_RENT_MULTIPLIER,
+  SYNERGY_MIN_TRADERS, SYNERGY_THRESHOLD_WIDENING_PERCENT,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
 
 // --- Constants ---
 
-const LIQUIDATION_BONUS_PERCENT = 0.5;
+const LIQUIDATION_BONUS_PERCENT = 0.3;
 const STEAL_PERCENT = 0.1;
+const STEAL_MAX = 1500;
 const LOOTBOX_BOX_COUNT = 4;
-const MM_PUSH_MODIFIER = 0.5;
 
 const SLOT_MULTIPLIERS: Record<string, number> = {
   '₿': 10,   // джекпот
@@ -28,6 +36,58 @@ const SLOT_MULTIPLIERS: Record<string, number> = {
 
 function roundBalance(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function createMMCasinoState(): MMCasinoState {
+  return {
+    levers: {
+      commission: { active: false, ticksLeft: 0, cooldownLeft: 0 },
+      freeze: { active: false, ticksLeft: 0, cooldownLeft: 0 },
+      squeeze: { active: false, ticksLeft: 0, cooldownLeft: 0 },
+    },
+    lastLeverTime: 0,
+    rentPausedTicksLeft: 0,
+    traderLastOpenTime: {},
+  };
+}
+
+// --- MM Casino Lever Configs ---
+
+const MM_LEVER_CONFIG: Record<MMLeverType, { duration: number; cooldown: number }> = {
+  commission: { duration: COMMISSION_DURATION_SEC, cooldown: COMMISSION_COOLDOWN_SEC },
+  freeze: { duration: FREEZE_DURATION_SEC_MM, cooldown: FREEZE_COOLDOWN_SEC },
+  squeeze: { duration: SQUEEZE_DURATION_SEC, cooldown: SQUEEZE_COOLDOWN_SEC },
+};
+
+// --- Synergy & Squeeze helpers ---
+
+export function hasSynergyBonus(game: GameState): boolean {
+  if (game.gameMode !== 'market_maker') return false;
+  const traders = game.players.filter(
+    (p) => p.connected && p.role === 'trader' && p.position,
+  );
+  if (traders.length < SYNERGY_MIN_TRADERS) return false;
+  const longCount = traders.filter((p) => p.position!.direction === 'long').length;
+  const shortCount = traders.filter((p) => p.position!.direction === 'short').length;
+  return longCount >= SYNERGY_MIN_TRADERS || shortCount >= SYNERGY_MIN_TRADERS;
+}
+
+function calcLiquidationPriceSqueeze(
+  direction: 'long' | 'short',
+  entryPrice: number,
+  leverage: Leverage,
+  squeezeFactor: number,
+  synergyFactor: number,
+): number {
+  // squeezeFactor: 0.3 means 30% tighter (closer to entry)
+  // synergyFactor: 0.3 means 30% wider (further from entry)
+  const base = 1 / leverage;
+  const adjusted = base * (1 - squeezeFactor) * (1 + synergyFactor);
+  if (direction === 'long') {
+    return entryPrice * (1 - adjusted);
+  } else {
+    return entryPrice * (1 + adjusted);
+  }
 }
 
 function validateBonusAction(
@@ -78,7 +138,7 @@ export async function createGame(gameMode: GameMode = 'classic'): Promise<GameSt
     availableLeverages: [...AVAILABLE_LEVERAGES],
     gameMode,
     marketMakerId: null,
-    mmNextCandleModifier: null,
+    mmCasino: null,
   };
 }
 
@@ -126,18 +186,75 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
   game.visibleCandleCount++;
   game.elapsed++;
 
-  // Market Maker: modify candle before it's shown
-  if (game.mmNextCandleModifier !== null && game.visibleCandleCount <= game.candles.length) {
-    const candle = game.candles[game.visibleCandleCount - 1];
-    const modifier = game.mmNextCandleModifier;
-    const delta = candle.close - candle.open;
-    candle.close = candle.open + delta * (1 + modifier);
-    candle.high = candle.open + (candle.high - candle.open) * (1 + modifier);
-    candle.low = candle.open + (candle.low - candle.open) * (1 + modifier);
-    // Ensure high/low bounds are correct
-    candle.high = Math.max(candle.high, candle.open, candle.close);
-    candle.low = Math.min(candle.low, candle.open, candle.close);
-    game.mmNextCandleModifier = null;
+  // MM Casino: tick levers, rent, inactivity
+  if (game.gameMode === 'market_maker' && game.mmCasino) {
+    const casino = game.mmCasino;
+    const mm = game.players.find((p) => p.id === game.marketMakerId);
+
+    // Tick lever durations and cooldowns
+    for (const leverKey of ['commission', 'freeze', 'squeeze'] as MMLeverType[]) {
+      const lever = casino.levers[leverKey];
+      if (lever.active && lever.ticksLeft > 0) {
+        lever.ticksLeft--;
+        if (lever.ticksLeft <= 0) {
+          lever.active = false;
+        }
+      }
+      if (lever.cooldownLeft > 0) {
+        lever.cooldownLeft--;
+      }
+    }
+
+    // Tick rent pause
+    if (casino.rentPausedTicksLeft > 0) {
+      casino.rentPausedTicksLeft--;
+    }
+
+    // MM inactivity check: if no lever pressed for threshold → pause rent + give traders bonus
+    const timeSinceLastLever = game.elapsed - casino.lastLeverTime;
+    if (casino.lastLeverTime > 0 && timeSinceLastLever >= MM_INACTIVITY_THRESHOLD_SEC && casino.rentPausedTicksLeft <= 0) {
+      // Only trigger once per inactivity window (check if we just crossed the threshold)
+      if (timeSinceLastLever === MM_INACTIVITY_THRESHOLD_SEC) {
+        casino.rentPausedTicksLeft = MM_INACTIVITY_RENT_PAUSE_SEC;
+        const traders = game.players.filter((p) => p.connected && p.role === 'trader');
+        for (const trader of traders) {
+          trader.balance = roundBalance(trader.balance + MM_INACTIVITY_TRADER_BONUS);
+        }
+      }
+    }
+
+    // Collect rent every RENT_INTERVAL_SEC seconds (unless paused)
+    if (game.elapsed % RENT_INTERVAL_SEC === 0 && casino.rentPausedTicksLeft <= 0 && mm) {
+      const traders = game.players.filter((p) => p.connected && p.role === 'trader');
+      for (const trader of traders) {
+        // Trader inactivity: no position opened for TRADER_INACTIVITY_THRESHOLD_SEC → rent doubled
+        const lastOpen = casino.traderLastOpenTime[trader.id] || 0;
+        const traderInactive = (game.elapsed - lastOpen) >= TRADER_INACTIVITY_THRESHOLD_SEC;
+        const rentAmount = traderInactive ? RENT_AMOUNT * TRADER_INACTIVITY_RENT_MULTIPLIER : RENT_AMOUNT;
+        const actualRent = Math.min(rentAmount, trader.balance);
+        trader.balance = roundBalance(trader.balance - actualRent);
+        if (trader.balance < 0) trader.balance = 0;
+        mm.balance = roundBalance(mm.balance + actualRent);
+      }
+    }
+
+    // Squeeze: recalculate liquidation prices with tightening factor (and synergy widening)
+    if (casino.levers.squeeze.active) {
+      const synergy = hasSynergyBonus(game);
+      const squeezeFactor = SQUEEZE_TIGHTENING_PERCENT / 100;
+      const synergyFactor = synergy ? SYNERGY_THRESHOLD_WIDENING_PERCENT / 100 : 0;
+      for (const player of game.players) {
+        if (player.position && player.role === 'trader' && player.connected) {
+          player.position.liquidationPrice = calcLiquidationPriceSqueeze(
+            player.position.direction,
+            player.position.entryPrice,
+            player.position.leverage,
+            squeezeFactor,
+            synergyFactor,
+          );
+        }
+      }
+    }
   }
 
   if (game.visibleCandleCount <= game.candles.length) {
@@ -182,8 +299,14 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
         player.liquidations++;
         player.totalTrades++;
         if (-loss < player.worstTrade) player.worstTrade = -loss;
-        // Бонус агрессору: 50% от суммы ликвидации
-        if (game.lastAggressorId && game.lastAggressorId !== player.id) {
+        // Liquidation bonus: in MM mode → 25% to MM; in classic → 50% to aggressor
+        if (game.gameMode === 'market_maker' && game.marketMakerId) {
+          const mm = game.players.find((p) => p.id === game.marketMakerId);
+          if (mm && mm.connected) {
+            const bonus = roundBalance(loss * MM_LIQUIDATION_BONUS_PERCENT / 100);
+            mm.balance = roundBalance(mm.balance + bonus);
+          }
+        } else if (game.lastAggressorId && game.lastAggressorId !== player.id) {
           const aggressor = game.players.find((p) => p.id === game.lastAggressorId);
           if (aggressor && aggressor.connected) {
             const bonus = roundBalance(loss * LIQUIDATION_BONUS_PERCENT);
@@ -231,10 +354,24 @@ export function openPosition(
   const player = getPlayer(game, playerId);
   if (!player) return { success: false, message: 'Игрок не найден' };
   if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
+
+  // MM cannot trade in market_maker mode
+  if (player.role === 'market_maker' && game.gameMode === 'market_maker') {
+    return { success: false, message: 'Маркет-мейкер не может торговать' };
+  }
+
   if (player.position) return { success: false, message: 'Закрой текущую позицию' };
   if (!game.availableLeverages.includes(leverage)) return { success: false, message: 'Это плечо больше недоступно' };
   if (size <= 0) return { success: false, message: 'Некорректная сумма' };
   if (size > player.balance) return { success: false, message: 'Недостаточно средств' };
+
+  // Position cap: max 30% of balance in MM mode
+  if (game.gameMode === 'market_maker') {
+    const maxSize = roundBalance(player.balance * MAX_POSITION_PERCENT / 100);
+    if (size > maxSize) {
+      return { success: false, message: `Макс. позиция ${MAX_POSITION_PERCENT}% баланса ($${maxSize})` };
+    }
+  }
 
   const liqPrice = calcLiquidationPrice(direction, game.currentPrice, leverage);
 
@@ -248,6 +385,19 @@ export function openPosition(
     }
   }
 
+  // Commission: MM lever active → deduct 3% of margin to MM
+  let commissionMsg = '';
+  if (game.gameMode === 'market_maker' && game.mmCasino?.levers.commission.active) {
+    const commissionFee = roundBalance(actualSize * COMMISSION_PERCENT / 100);
+    player.balance = roundBalance(player.balance - commissionFee);
+    if (player.balance < 0) player.balance = 0;
+    const mm = game.players.find((p) => p.id === game.marketMakerId);
+    if (mm) {
+      mm.balance = roundBalance(mm.balance + commissionFee);
+    }
+    commissionMsg = ` (комиссия $${commissionFee.toFixed(2)})`;
+  }
+
   player.position = {
     direction,
     size: actualSize,
@@ -257,9 +407,14 @@ export function openPosition(
     liquidationPrice: liqPrice,
   };
 
+  // Track trader open time for inactivity
+  if (game.gameMode === 'market_maker' && game.mmCasino) {
+    game.mmCasino.traderLastOpenTime[playerId] = game.elapsed;
+  }
+
   return {
     success: true,
-    message: `${direction.toUpperCase()} x${leverage} $${actualSize} @ ${game.currentPrice}${doubledMsg}`,
+    message: `${direction.toUpperCase()} x${leverage} $${actualSize} @ ${game.currentPrice}${doubledMsg}${commissionMsg}`,
   };
 }
 
@@ -274,9 +429,24 @@ export function closePosition(
   if (!player) return { success: false, message: 'Игрок не найден', pnl: 0 };
   if (!player.position) return { success: false, message: 'Нет открытой позиции', pnl: 0 };
 
+  // MM Freeze lever: traders cannot close during freeze
+  if (game.gameMode === 'market_maker' && game.mmCasino?.levers.freeze.active && player.role === 'trader') {
+    return { success: false, message: 'Заморозка! Нельзя закрыть позицию', pnl: 0 };
+  }
+
   const price = player.freezePrice ?? game.currentPrice;
   const basePnl = calculatePnl(player.position, price);
-  const pnl = roundBalance(basePnl * player.pnlMultiplier);
+  let pnl = roundBalance(basePnl * player.pnlMultiplier);
+
+  // Commission on close if lever active
+  if (game.gameMode === 'market_maker' && game.mmCasino?.levers.commission.active && player.role === 'trader') {
+    const commissionFee = roundBalance(player.position.size * COMMISSION_PERCENT / 100);
+    pnl = roundBalance(pnl - commissionFee);
+    const mm = game.players.find((p) => p.id === game.marketMakerId);
+    if (mm) {
+      mm.balance = roundBalance(mm.balance + commissionFee);
+    }
+  }
 
   player.balance += pnl;
   player.pnl += pnl;
@@ -335,6 +505,8 @@ export function getLeaderboard(game: GameState): LeaderboardEntry[] {
         positionLeverage: p.position?.leverage || null,
         positionOpenedAt: p.position?.openedAt ?? null,
         positionEntryPrice: p.position?.entryPrice ?? null,
+        positionSize: p.position?.size ?? null,
+        liquidationPrice: p.position?.liquidationPrice ?? null,
         role: p.role,
       };
     })
@@ -403,21 +575,43 @@ export function assignMarketMaker(game: GameState): Player | null {
   mm.balance = MM_STARTING_BALANCE;
   mm.maxBalance = MM_STARTING_BALANCE;
   game.marketMakerId = mm.id;
+  game.mmCasino = createMMCasinoState();
   console.log(`[Game] Market Maker assigned: ${mm.nickname}`);
   return mm;
 }
 
-export function mmPush(
+export function useMMLever(
   game: GameState,
   playerId: string,
-  direction: 'up' | 'down',
-): { success: boolean; message: string } {
+  lever: MMLeverType,
+): { success: boolean; message: string; duration?: number } {
   if (game.gameMode !== 'market_maker') return { success: false, message: 'Не тот режим' };
   if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
   if (game.marketMakerId !== playerId) return { success: false, message: 'Ты не маркет-мейкер' };
-  if (game.mmNextCandleModifier !== null) return { success: false, message: 'Уже нажал на этой свече' };
-  game.mmNextCandleModifier = direction === 'up' ? MM_PUSH_MODIFIER : -MM_PUSH_MODIFIER;
-  return { success: true, message: direction === 'up' ? '📈 +50%' : '📉 -50%' };
+  if (!game.mmCasino) return { success: false, message: 'Casino не инициализировано' };
+
+  const leverState = game.mmCasino.levers[lever];
+  if (!leverState) return { success: false, message: 'Неизвестный рычаг' };
+  if (leverState.active) return { success: false, message: 'Рычаг уже активен' };
+  if (leverState.cooldownLeft > 0) return { success: false, message: `Кулдаун: ${leverState.cooldownLeft}с` };
+
+  const config = MM_LEVER_CONFIG[lever];
+  leverState.active = true;
+  leverState.ticksLeft = config.duration;
+  leverState.cooldownLeft = config.cooldown;
+  game.mmCasino.lastLeverTime = game.elapsed;
+
+  const leverNames: Record<MMLeverType, string> = {
+    commission: 'Комиссия',
+    freeze: 'Заморозка',
+    squeeze: 'Сквиз',
+  };
+
+  return {
+    success: true,
+    message: `${leverNames[lever]} активирован на ${config.duration}с`,
+    duration: config.duration,
+  };
 }
 
 export function getMarketMakerResult(game: GameState): { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null {
@@ -534,7 +728,7 @@ export function useSkill(
         return { success: true, message: '🦹 КРАЖА! Не у кого красть...', skill };
       }
       const victim = others[Math.floor(Math.random() * others.length)];
-      const stolen = roundBalance(victim.balance * STEAL_PERCENT);
+      const stolen = roundBalance(Math.min(victim.balance * STEAL_PERCENT, STEAL_MAX));
       victim.balance = roundBalance(victim.balance - stolen);
       player.balance = roundBalance(player.balance + stolen);
       return { success: true, message: `🦹 КРАЖА! Украл $${stolen.toFixed(0)} у ${victim.nickname}!`, skill, affectsAll: true };
@@ -545,9 +739,10 @@ export function useSkill(
       for (const p of game.players) {
         if (p.position && p.connected) {
           p.position.direction = p.position.direction === 'long' ? 'short' : 'long';
-          // Пересчитать цену ликвидации
+          // Пересчитать entry и ликвидацию от текущей цены (даёт шанс выжить на высоких плечах)
+          p.position.entryPrice = game.currentPrice;
           p.position.liquidationPrice = calcLiquidationPrice(
-            p.position.direction, p.position.entryPrice, p.position.leverage
+            p.position.direction, game.currentPrice, p.position.leverage
           );
         }
       }
@@ -824,11 +1019,21 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.voteState = null;
   game.bonusState = null;
   game.lastAggressorId = null;
-  game.mmNextCandleModifier = null;
+
+  // Reset MM Casino state for new round
+  if (game.gameMode === 'market_maker') {
+    game.mmCasino = createMMCasinoState();
+  }
 
   // Убрать наименьшее плечо (пока не останется только 500x)
+  // In MM mode, keep 200x available in rounds 5-6
   if (game.availableLeverages.length > 1) {
-    game.availableLeverages = game.availableLeverages.slice(1);
+    const nextLeverages = game.availableLeverages.slice(1);
+    if (game.gameMode === 'market_maker' && !nextLeverages.includes(200 as Leverage) && game.availableLeverages.includes(200 as Leverage)) {
+      // Don't remove leverage if it would eliminate 200x in MM mode
+    } else {
+      game.availableLeverages = nextLeverages;
+    }
   }
 
   // Сброс PnL и скиллов (баланс сохраняется между раундами)
