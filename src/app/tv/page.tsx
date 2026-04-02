@@ -50,8 +50,8 @@ export default function TVPage() {
       return (
         <div className="h-screen bg-background text-white flex flex-col items-center justify-center">
           <h1 className="text-7xl font-display font-black tracking-tight mb-2">
-            <span className="font-display text-accent-green">INVEST</span>
-            <span className="font-display text-accent-gold">SOVET</span>
+            <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
+            <span className="font-display text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
           </h1>
           <p className="text-text-secondary text-xl mb-16">Trading Arena</p>
 
@@ -101,8 +101,8 @@ export default function TVPage() {
       <div className="h-screen bg-background text-white flex flex-col">
         <header className="text-center py-8">
           <h1 className="text-7xl font-display font-black tracking-tight">
-            <span className="font-display text-accent-green">INVEST</span>
-            <span className="font-display text-accent-gold">SOVET</span>
+            <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
+            <span className="font-display text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
           </h1>
           <p className="text-text-secondary text-xl mt-2">
             {isMMMode ? <span className="inline-flex items-center gap-1"><IconCrown size={16} /> Режим: Маркет-Мейкер</span> : 'Trading Arena'}

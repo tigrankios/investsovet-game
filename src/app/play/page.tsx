@@ -101,8 +101,8 @@ function PlayContent() {
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
         <h1 className="text-4xl font-display font-black mb-2">
-          <span className="font-display text-accent-green">INVEST</span>
-          <span className="font-display text-accent-gold">SOVET</span>
+          <span className="font-display text-accent-green" style={{ textShadow: '0 0 30px rgba(0,230,118,0.4)' }}>INVEST</span>
+          <span className="font-display text-accent-gold" style={{ textShadow: '0 0 30px rgba(255,215,64,0.4)' }}>SOVET</span>
         </h1>
         <p className="text-text-secondary mb-8">Trading Arena</p>
 

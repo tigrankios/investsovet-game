@@ -23,7 +23,7 @@ export default function Home() {
             onClick={() => router.push('/tv')}
             className="bg-gradient-to-r from-accent-gold to-amber-500 text-background font-display font-bold text-xl py-5 rounded-2xl glow-gold hover:scale-105 transition-all active:scale-95"
           >
-            <span className="flex items-center justify-center gap-2"><IconTV size={24} /> Запустить на ТВ</span>
+            <span className="flex items-center justify-center gap-2"><IconTV size={24} color="#0B0E17" /> Запустить на ТВ</span>
           </button>
           <button
             onClick={() => router.push('/play')}
