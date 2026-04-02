@@ -404,18 +404,30 @@ function PlayContent() {
             <button
               onClick={usePlayerSkill}
               disabled={playerState.frozen}
-              className={`w-full py-3 rounded-xl font-display font-bold text-lg active:scale-95 transition-all bg-gradient-to-r from-purple-600 to-pink-600 text-white ${playerState.frozen ? 'opacity-40' : 'animate-glow-pulse glow-purple'}`}
+              className={`w-full rounded-xl active:scale-95 transition-all border ${playerState.frozen ? 'opacity-40 border-border bg-surface' : 'border-accent-purple/50 bg-surface hover:bg-surface-light'}`}
+              style={!playerState.frozen ? { boxShadow: '0 0 20px rgba(179,136,255,0.15), inset 0 0 30px rgba(179,136,255,0.05)' } : undefined}
             >
-              <span className="flex items-center justify-center gap-1">{SKILL_ICON_MAP[playerState.skill]?.({ size: 20 })} {SKILL_NAMES[playerState.skill]}</span>
-              <span className="block text-xs font-normal opacity-80">{SKILL_DESCRIPTIONS[playerState.skill]}</span>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-10 h-10 rounded-lg bg-accent-purple/20 flex items-center justify-center flex-shrink-0">
+                  {SKILL_ICON_MAP[playerState.skill]?.({ size: 22 })}
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-display font-bold text-sm text-text-primary">{SKILL_NAMES[playerState.skill]}</p>
+                  <p className="text-xs text-text-secondary">{SKILL_DESCRIPTIONS[playerState.skill]}</p>
+                </div>
+                <div className="text-accent-purple text-xs font-display font-bold uppercase tracking-wider">USE</div>
+              </div>
             </button>
           </div>
         )}
         {playerState.role !== 'market_maker' && playerState.skill && playerState.skillUsed && (
-          <div className="mx-4 mt-2 text-center">
-            <span className="inline-flex items-center gap-1 text-text-secondary text-sm">{SKILL_ICON_MAP[playerState.skill]?.({ size: 14 })} {SKILL_NAMES[playerState.skill]} — использован</span>
-            {playerState.shieldActive && <span className="inline-flex items-center gap-1 text-accent-gold text-sm ml-2"><IconSkillShield size={14} /> Щит активен</span>}
-            {playerState.blindTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-purple text-sm ml-2"><IconSkillBlind size={14} /> Слепой: {playerState.blindTicksLeft}</span>}
+          <div className="mx-4 mt-2">
+            <div className="flex items-center gap-2 justify-center text-sm text-text-muted">
+              <span className="inline-flex items-center gap-1">{SKILL_ICON_MAP[playerState.skill]?.({ size: 14 })} {SKILL_NAMES[playerState.skill]}</span>
+              <span className="text-text-muted">— использован</span>
+              {playerState.shieldActive && <span className="inline-flex items-center gap-1 text-accent-green"><IconSkillShield size={14} /> активен</span>}
+              {playerState.blindTicksLeft > 0 && <span className="inline-flex items-center gap-1 text-accent-blue"><IconSkillBlind size={14} /> {playerState.blindTicksLeft}с</span>}
+            </div>
           </div>
         )}
 
@@ -516,8 +528,8 @@ function PlayContent() {
   if (gameState.phase === 'bonus' && playerState) {
     const bonusBalance = playerState.balance;
     const bonusBet = Math.floor(bonusBalance * bonusBetPercent / 100);
-    const timer = bonusData?.timer || gameState.bonusTimer;
-    const bonusType = bonusData?.bonusType || gameState.bonusType;
+    const timer = bonusData?.timer ?? gameState.bonusTimer;
+    const bonusType = bonusData?.bonusType ?? gameState.bonusType;
 
     const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', 'D', 'R', 'G', 'M'];
 

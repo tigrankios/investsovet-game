@@ -257,8 +257,8 @@ export default function TVPage() {
 
   // --- BONUS ---
   if (phase === 'bonus') {
-    const timer = bonusData?.timer || gameState.bonusTimer;
-    const bonusType = bonusData?.bonusType || gameState.bonusType;
+    const timer = bonusData?.timer ?? gameState.bonusTimer;
+    const bonusType = bonusData?.bonusType ?? gameState.bonusType;
     const bonusResults = bonusData?.results || [];
 
     return (
