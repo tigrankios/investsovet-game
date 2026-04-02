@@ -26,8 +26,13 @@ export default function TestWheel() {
     setResult(null);
 
     const sectorIdx = Math.floor(Math.random() * 8);
-    const sectorAngle = 360 - (sectorIdx * 45 + 22.5);
-    const target = wheelAngle + 360 * 5 + sectorAngle;
+    // Сектор i начинается с i*45° от верха. Чтобы центр сектора совпал с указателем,
+    // нужно повернуть на -(i*45 + 22.5)° т.е. 360 - (i*45 + 22.5).
+    // Прибавляем полных оборотов от текущей позиции.
+    const landAngle = 360 - (sectorIdx * 45 + 22.5);
+    const currentMod = wheelAngle % 360;
+    const extraRotation = landAngle <= currentMod ? 360 : 0;
+    const target = wheelAngle - currentMod + 360 * 5 + landAngle + extraRotation;
 
     setTimeout(() => setWheelAngle(target), 50);
 

@@ -120,8 +120,10 @@ function PlayContent() {
     if (interval) clearInterval(interval);
 
     const sectorIdx = bonusResult.result.sectorIndex;
-    const sectorAngle = 360 - (sectorIdx * 45 + 22.5); // center of sector
-    const targetAngle = 360 * 5 + sectorAngle; // 5 full rotations + target
+    const landAngle = 360 - (sectorIdx * 45 + 22.5);
+    const currentMod = wheelAngle % 360;
+    const extraRotation = landAngle <= currentMod ? 360 : 0;
+    const targetAngle = wheelAngle - currentMod + 360 * 5 + landAngle + extraRotation;
 
     setWheelAngle(targetAngle);
     // After CSS transition finishes (3s), mark as played
