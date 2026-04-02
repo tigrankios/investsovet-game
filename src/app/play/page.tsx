@@ -30,8 +30,8 @@ function PlayContent() {
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmPushAlert,
-    joinRoom, openPosition, closePosition, usePlayerSkill, mmPush, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmLeverAlert, mmRentAlert,
+    joinRoom, openPosition, closePosition, usePlayerSkill, useMMLever, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   } = useGame();
 
   // Reconnect: достаём данные из sessionStorage
@@ -212,9 +212,14 @@ function PlayContent() {
             {skillAlert}
           </div>
         )}
-        {mmPushAlert && (
+        {mmLeverAlert && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent-gold text-black font-bold rounded-lg px-4 py-2 z-50 animate-alert">
-            {mmPushAlert}
+            {mmLeverAlert}
+          </div>
+        )}
+        {mmRentAlert && playerState?.role === 'trader' && gameState.gameMode === 'market_maker' && (
+          <div className="absolute top-2 right-4 text-accent-red font-mono font-bold text-sm z-50 animate-ping">
+            {mmRentAlert}
           </div>
         )}
 
@@ -281,25 +286,75 @@ function PlayContent() {
           </div>
         )}
 
-        {/* Market Maker Buttons */}
-        {playerState.role === 'market_maker' && (
-          <div className="mx-4 mt-3">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <span className="text-accent-gold font-bold text-sm">[MM] МАРКЕТ-МЕЙКЕР</span>
+        {/* Market Maker Dashboard */}
+        {playerState.role === 'market_maker' && gameState.gameMode === 'market_maker' && (
+          <div className="flex-1 flex flex-col mx-4 mt-2">
+            {/* MM Balance */}
+            <div className="text-center mb-3">
+              <p className="text-text-secondary text-xs uppercase">MM Баланс</p>
+              <p className="text-3xl font-mono font-bold text-accent-gold">${playerState.balance.toFixed(0)}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => mmPush('up')}
-                className="py-3 rounded-xl font-bold text-lg active:scale-95 transition-all bg-accent-green text-white"
-              >
-                UP +50%
-              </button>
-              <button
-                onClick={() => mmPush('down')}
-                className="py-3 rounded-xl font-bold text-lg active:scale-95 transition-all bg-accent-red text-white"
-              >
-                DOWN -50%
-              </button>
+
+            {/* Lever Buttons */}
+            <div className="space-y-2 mb-3">
+              {(['commission', 'freeze', 'squeeze'] as const).map((lever) => {
+                const leverState = gameState.mmLevers?.[lever];
+                const isActive = leverState?.active || false;
+                const cooldown = leverState?.cooldownLeft || 0;
+                const canUse = !isActive && cooldown <= 0;
+                const configs = {
+                  commission: { label: 'КОМИССИЯ x3', color: 'bg-accent-red', desc: '3% fee на сделки' },
+                  freeze: { label: 'ЗАМОРОЗКА', color: 'bg-blue-600', desc: 'Блокирует закрытие' },
+                  squeeze: { label: 'СЖАТИЕ', color: 'bg-accent-gold', desc: 'Ликвидация ближе' },
+                } as const;
+                const cfg = configs[lever];
+                return (
+                  <button
+                    key={lever}
+                    onClick={() => useMMLever(lever)}
+                    disabled={!canUse}
+                    className={`w-full py-4 rounded-xl font-bold text-lg active:scale-95 transition-all ${
+                      isActive ? `${cfg.color} text-white animate-pulse` :
+                      canUse ? `${cfg.color} text-white` :
+                      'bg-surface-light text-text-muted'
+                    } disabled:opacity-40`}
+                  >
+                    <div>{cfg.label}</div>
+                    <div className="text-xs font-normal opacity-80">
+                      {isActive ? `Активно (${leverState?.ticksLeft}s)` :
+                       cooldown > 0 ? `Кулдаун (${cooldown}s)` :
+                       cfg.desc}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Trader Positions Dashboard */}
+            <div className="flex-1 overflow-y-auto space-y-2">
+              <p className="text-text-secondary text-xs uppercase mb-1">Позиции трейдеров</p>
+              {leaderboard.filter((e) => e.role === 'trader').map((entry) => (
+                <div key={entry.nickname} className={`rounded-lg p-2 text-sm border ${
+                  entry.hasPosition
+                    ? entry.totalPnl >= 0 ? 'bg-accent-green/10 border-accent-green/30' : 'bg-accent-red/10 border-accent-red/30'
+                    : 'bg-surface-light border-border'
+                }`}>
+                  <div className="flex justify-between">
+                    <span className="font-bold">{entry.nickname}</span>
+                    <span className="font-mono">${entry.balance.toFixed(0)}</span>
+                  </div>
+                  {entry.hasPosition && (
+                    <div className="flex justify-between text-xs mt-1 text-text-secondary">
+                      <span className={entry.positionDirection === 'long' ? 'text-accent-green' : 'text-accent-red'}>
+                        {entry.positionDirection?.toUpperCase()} x{entry.positionLeverage}
+                      </span>
+                      <span>
+                        ${entry.positionSize} | Liq: {entry.liquidationPrice?.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -308,6 +363,27 @@ function PlayContent() {
         {playerState.role === 'trader' && gameState.gameMode === 'market_maker' && gameState.marketMakerNickname && (
           <div className="mx-4 mt-2 text-center">
             <span className="text-accent-gold/70 text-xs">vs Маркет-Мейкер: {gameState.marketMakerNickname}</span>
+          </div>
+        )}
+
+        {/* Active MM effects for traders */}
+        {playerState.role === 'trader' && gameState.gameMode === 'market_maker' && gameState.mmLevers && (
+          <div className="mx-4 mt-1 space-y-1">
+            {gameState.mmLevers.commission.active && (
+              <div className="bg-accent-red/20 border border-accent-red/50 rounded-lg px-3 py-1 text-accent-red text-xs font-bold text-center animate-pulse">
+                КОМИССИЯ x3 — 3% fee! ({gameState.mmLevers.commission.ticksLeft}s)
+              </div>
+            )}
+            {gameState.mmLevers.freeze.active && (
+              <div className="bg-blue-600/20 border border-blue-500/50 rounded-lg px-3 py-1 text-blue-400 text-xs font-bold text-center animate-pulse">
+                ЗАМОРОЗКА — Нельзя закрыть! ({gameState.mmLevers.freeze.ticksLeft}s)
+              </div>
+            )}
+            {gameState.mmLevers.squeeze.active && (
+              <div className="bg-accent-gold/20 border border-accent-gold/50 rounded-lg px-3 py-1 text-accent-gold text-xs font-bold text-center animate-pulse">
+                СЖАТИЕ — Ликвидация ближе! ({gameState.mmLevers.squeeze.ticksLeft}s)
+              </div>
+            )}
           </div>
         )}
 
@@ -334,16 +410,19 @@ function PlayContent() {
 
         <div className="flex-1" />
 
-        {/* Controls */}
+        {/* Controls (traders only) */}
+        {playerState.role !== 'market_maker' && (
         <div className="px-4 pb-6 space-y-3">
           {position ? (
             <button
               onClick={closePosition}
+              disabled={playerState.isFreezed}
               className={`w-full py-5 rounded-xl font-display font-bold text-xl active:scale-95 transition-all ${
+                playerState.isFreezed ? 'bg-blue-600 text-white opacity-60' :
                 unrealizedPnl >= 0 ? 'bg-accent-green text-white glow-green' : 'bg-accent-red text-white glow-red'
               }`}
             >
-              ЗАКРЫТЬ {unrealizedPnl >= 0 ? '+' : ''}{unrealizedPnl.toFixed(2)}$
+              {playerState.isFreezed ? 'ЗАМОРОЖЕНО' : `ЗАКРЫТЬ ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)}$`}
             </button>
           ) : (
             <>
@@ -410,6 +489,7 @@ function PlayContent() {
             </>
           )}
         </div>
+        )}
       </div>
     );
   }

@@ -14,7 +14,7 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    voteData, liquidationAlert, bonusData, finalStats, mmResult, mmPushAlert,
+    voteData, liquidationAlert, bonusData, finalStats, mmResult, mmLeverAlert, mmRentAlert,
     createRoom, startGame,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -182,10 +182,10 @@ export default function TVPage() {
           </div>
         )}
 
-        {/* MM Push алерт */}
-        {mmPushAlert && (
+        {/* MM Lever алерт */}
+        {mmLeverAlert && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent-gold text-black font-bold text-2xl px-8 py-3 rounded-xl z-50 animate-alert">
-            {mmPushAlert}
+            {mmLeverAlert}
           </div>
         )}
 
@@ -198,12 +198,38 @@ export default function TVPage() {
           </div>
           <div className="flex items-center gap-2">
             {isMMMode && (
+              <span className="text-accent-gold text-sm font-mono font-bold mr-3">
+                ${gameState.mmBalance.toFixed(0)}
+              </span>
+            )}
+            {isMMMode && (
               <span className="text-accent-gold text-sm font-bold mr-3 inline-flex items-center gap-1"><IconCrown size={14} /> MM: {gameState.marketMakerNickname}</span>
             )}
             <span className="w-2 h-2 bg-accent-green rounded-full animate-pulse" />
             <span className="text-text-secondary text-sm">LIVE</span>
           </div>
         </div>
+
+        {/* MM Active Effects */}
+        {isMMMode && gameState.mmLevers && (
+          <div className="flex gap-2 px-6 py-1">
+            {gameState.mmLevers.commission.active && (
+              <span className="bg-accent-red/20 border border-accent-red/50 rounded px-3 py-1 text-accent-red text-sm font-bold animate-pulse">
+                КОМИССИЯ x3 ({gameState.mmLevers.commission.ticksLeft}s)
+              </span>
+            )}
+            {gameState.mmLevers.freeze.active && (
+              <span className="bg-blue-600/20 border border-blue-500/50 rounded px-3 py-1 text-blue-400 text-sm font-bold animate-pulse">
+                ЗАМОРОЗКА ({gameState.mmLevers.freeze.ticksLeft}s)
+              </span>
+            )}
+            {gameState.mmLevers.squeeze.active && (
+              <span className="bg-accent-gold/20 border border-accent-gold/50 rounded px-3 py-1 text-accent-gold text-sm font-bold animate-pulse">
+                СЖАТИЕ ({gameState.mmLevers.squeeze.ticksLeft}s)
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Chart + Leaderboard */}
         <div className="flex-1 flex">
