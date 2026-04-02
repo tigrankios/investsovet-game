@@ -49,6 +49,9 @@ function PlayContent() {
   // Lootbox state
   const [lootboxRevealed, setLootboxRevealed] = useState(false);
   const [revealedBoxes, setRevealedBoxes] = useState<boolean[]>([false, false, false, false]);
+  // Wheel state
+  const [wheelAngle, setWheelAngle] = useState(0);
+  const [wheelSpinning, setWheelSpinning] = useState(false);
   // Loto state
   const [lotoNumbers, setLotoNumbers] = useState<number[]>([]);
 
@@ -85,6 +88,8 @@ function PlayContent() {
     setLootboxRevealed(false);
     setRevealedBoxes([false, false, false, false]);
     setLotoNumbers([]);
+    setWheelAngle(0);
+    setWheelSpinning(false);
     // Автовыбор плеча если текущее стало недоступным
     const avail = gameState?.availableLeverages;
     if (avail && avail.length > 0 && !avail.includes(leverage)) {
@@ -106,6 +111,26 @@ function PlayContent() {
     setLootboxRevealed(true);
     return () => timeouts.forEach(clearTimeout);
   }, [bonusResult, lootboxRevealed]);
+
+  // Wheel landing animation — when result arrives, slow down and land on sector
+  useEffect(() => {
+    if (!bonusResult || bonusResult.type !== 'wheel' || !wheelSpinning) return;
+    // Stop fast spin
+    const interval = (window as unknown as Record<string, unknown>).__wheelInterval as ReturnType<typeof setInterval> | undefined;
+    if (interval) clearInterval(interval);
+
+    const sectorIdx = bonusResult.result.sectorIndex;
+    const sectorAngle = 360 - (sectorIdx * 45 + 22.5); // center of sector
+    const targetAngle = 360 * 5 + sectorAngle; // 5 full rotations + target
+
+    setWheelAngle(targetAngle);
+    // After CSS transition finishes (3s), mark as played
+    setTimeout(() => {
+      setWheelSpinning(false);
+      setAnimating(false);
+      setHasPlayed(true);
+    }, 3000);
+  }, [bonusResult, wheelSpinning]);
 
   // --- JOIN SCREEN ---
   if (!joined) {
@@ -154,7 +179,7 @@ function PlayContent() {
               joinRoom(roomCode, nickname);
               setJoined(true);
             }}
-            disabled={!roomCode || !nickname}
+            disabled={roomCode.length === 0 || nickname.length === 0}
             className="w-full bg-accent-green text-white font-display font-bold text-xl py-4 rounded-xl disabled:opacity-30 active:scale-95 transition-all glow-green"
           >
             ВОЙТИ
@@ -598,13 +623,19 @@ function PlayContent() {
 
     // --- Wheel spin handler ---
     const handleWheelSpin = () => {
-      if (hasPlayed || bonusBet <= 0) return;
+      if (hasPlayed || bonusBet <= 0 || wheelSpinning) return;
+      setWheelSpinning(true);
       setAnimating(true);
-      setTimeout(() => {
-        spinWheel(bonusBet);
-        setHasPlayed(true);
-        setAnimating(false);
-      }, 2000);
+      // Send to server immediately, result will arrive and we'll land on it
+      spinWheel(bonusBet);
+      // Start spinning fast (will be stopped when bonusResult arrives)
+      let angle = wheelAngle;
+      const spinInterval = setInterval(() => {
+        angle += 15;
+        setWheelAngle(angle);
+      }, 16);
+      // Store interval for cleanup
+      (window as unknown as Record<string, unknown>).__wheelInterval = spinInterval;
     };
 
     // --- Lootbox handler ---
@@ -641,38 +672,80 @@ function PlayContent() {
         <h2 className="text-3xl font-display font-black mb-6 text-accent-gold flex items-center gap-2">{BONUS_ICON_MAP[bonusType || 'slots']?.({ size: 28 })} {BONUS_TITLES[bonusType || 'slots']}</h2>
 
         {/* === WHEEL UI === */}
-        {bonusType === 'wheel' && (
-          <>
-            {/* Wheel sectors display */}
-            <div className="grid grid-cols-4 gap-2 mb-6 w-full max-w-sm">
-              {[
-                { label: 'BUST', color: 'bg-accent-red', mult: 0 },
-                { label: 'x0.5', color: 'bg-orange-500', mult: 0.5 },
-                { label: 'x1.5', color: 'bg-gray-600', mult: 1.5 },
-                { label: 'x2', color: 'bg-accent-green', mult: 2 },
-                { label: 'x3', color: 'bg-blue-600', mult: 3 },
-                { label: 'x5', color: 'bg-accent-purple', mult: 5 },
-                { label: 'x10', color: 'bg-amber-600', mult: 10 },
-                { label: 'x25', color: 'bg-gradient-to-r from-pink-500 to-yellow-500', mult: 25 },
-              ].map((sector) => (
-                <div
-                  key={sector.label}
-                  className={`${sector.color} rounded-lg py-3 text-center font-bold text-sm ${
-                    hasPlayed && bonusResult?.type === 'wheel' && bonusResult.result.multiplier === sector.mult
-                      ? 'ring-4 ring-accent-gold scale-110'
-                      : hasPlayed ? 'opacity-30' : ''
-                  } transition-all`}
-                >
-                  {sector.label}
-                </div>
-              ))}
-            </div>
+        {bonusType === 'wheel' && (() => {
+          const sectors = [
+            { label: 'BUST', color: '#FF1744', mult: 0 },
+            { label: 'x0.5', color: '#FF6D00', mult: 0.5 },
+            { label: 'x1.5', color: '#546E7A', mult: 1.5 },
+            { label: 'x2', color: '#00E676', mult: 2 },
+            { label: 'x3', color: '#448AFF', mult: 3 },
+            { label: 'x5', color: '#B388FF', mult: 5 },
+            { label: 'x10', color: '#FFD740', mult: 10 },
+            { label: 'x25', color: '#FF4081', mult: 25 },
+          ];
+          const r = 120;
+          const cx = 140;
+          const cy = 140;
+          const sectorAngle = 360 / sectors.length;
 
-            {animating && (
-              <div className="mb-6 animate-spin"><IconWheel size={48} /></div>
-            )}
-          </>
-        )}
+          return (
+            <div className="relative mb-6" style={{ width: 280, height: 280 }}>
+              {/* Pointer triangle at top */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1 z-10">
+                <svg width="24" height="20" viewBox="0 0 24 20">
+                  <polygon points="12,20 0,0 24,0" fill="#FFD740" />
+                </svg>
+              </div>
+              {/* Spinning wheel */}
+              <svg
+                width={280} height={280} viewBox="0 0 280 280"
+                style={{
+                  transform: `rotate(${wheelAngle}deg)`,
+                  transition: wheelSpinning && bonusResult?.type === 'wheel' ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
+                }}
+              >
+                {sectors.map((sec, i) => {
+                  const startAngle = (i * sectorAngle - 90) * Math.PI / 180;
+                  const endAngle = ((i + 1) * sectorAngle - 90) * Math.PI / 180;
+                  const x1 = cx + r * Math.cos(startAngle);
+                  const y1 = cy + r * Math.sin(startAngle);
+                  const x2 = cx + r * Math.cos(endAngle);
+                  const y2 = cy + r * Math.sin(endAngle);
+                  const midAngle = ((i + 0.5) * sectorAngle - 90) * Math.PI / 180;
+                  const tx = cx + (r * 0.65) * Math.cos(midAngle);
+                  const ty = cy + (r * 0.65) * Math.sin(midAngle);
+                  const textRotation = (i + 0.5) * sectorAngle;
+
+                  return (
+                    <g key={i}>
+                      <path
+                        d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`}
+                        fill={sec.color}
+                        stroke="#0B0E17"
+                        strokeWidth={2}
+                      />
+                      <text
+                        x={tx} y={ty}
+                        fill="white"
+                        fontSize={r > 100 ? 13 : 10}
+                        fontWeight="bold"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        transform={`rotate(${textRotation}, ${tx}, ${ty})`}
+                        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                      >
+                        {sec.label}
+                      </text>
+                    </g>
+                  );
+                })}
+                {/* Center circle */}
+                <circle cx={cx} cy={cy} r={20} fill="#0B0E17" stroke="#1E2333" strokeWidth={3} />
+                <circle cx={cx} cy={cy} r={8} fill="#FFD740" />
+              </svg>
+            </div>
+          );
+        })()}
 
         {/* === SLOTS UI === */}
         {bonusType === 'slots' && (
