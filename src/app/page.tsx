@@ -6,30 +6,33 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
-      <div className="text-center">
-        <h1 className="text-7xl font-black tracking-tight mb-2">
-          <span className="text-green-400">INVEST</span>
-          <span className="text-yellow-400">SOVET</span>
+    <div
+      className="min-h-screen bg-background text-text-primary flex flex-col items-center justify-center p-6"
+      style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(0,230,118,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(255,215,64,0.05) 0%, transparent 50%), #0B0E17' }}
+    >
+      <div className="text-center animate-slide-up">
+        <h1 className="text-7xl font-display font-black tracking-tight mb-2">
+          <span className="text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
+          <span className="text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
         </h1>
-        <p className="text-gray-400 text-xl mb-12">Командная игра для пацанов</p>
+        <p className="text-text-secondary text-xl mb-12">Командная игра для пацанов</p>
 
         <div className="flex flex-col gap-4 max-w-sm mx-auto">
           <button
             onClick={() => router.push('/tv')}
-            className="bg-yellow-400 text-black font-bold text-xl py-5 rounded-xl hover:bg-yellow-300 transition-all hover:scale-105 active:scale-95"
+            className="bg-gradient-to-r from-accent-gold to-amber-500 text-background font-display font-bold text-xl py-5 rounded-2xl glow-gold hover:scale-105 transition-all active:scale-95"
           >
             📺 Запустить на ТВ
           </button>
           <button
             onClick={() => router.push('/play')}
-            className="bg-green-400/10 text-green-400 border border-green-400/30 font-bold text-xl py-5 rounded-xl hover:bg-green-400/20 transition-all active:scale-95"
+            className="glass text-accent-green font-display font-bold text-xl py-5 rounded-2xl hover:border-accent-green/60 transition-all active:scale-95"
           >
             📱 Войти как игрок
           </button>
         </div>
 
-        <div className="mt-16 text-gray-600 text-sm max-w-md mx-auto">
+        <div className="mt-16 text-text-muted text-sm max-w-md mx-auto">
           <p>Быки vs Медведи. Крипта, трейдинг, тачки, и не только.</p>
           <p className="mt-1">Собирайтесь перед экраном и играйте с телефонов.</p>
         </div>
