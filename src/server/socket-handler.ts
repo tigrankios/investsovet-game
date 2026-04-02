@@ -46,6 +46,7 @@ function getClientGameState(game: GameState): ClientGameState {
     mmBalance: game.marketMakerId
       ? Math.round((game.players.find((p) => p.id === game.marketMakerId)?.balance || 0) * 100) / 100
       : 0,
+    blindActive: game.players.some((p) => p.blindTicksLeft > 0),
   };
 }
 

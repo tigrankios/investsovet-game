@@ -74,7 +74,7 @@ export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
   shield: 'Защита от ликвидации (1 раз)',
   double_or_nothing: 'Удваивает маржу позиции',
   freeze: 'Фиксирует цену на 5 свечей',
-  blind: 'Скрывает график у ВСЕХ на 15 сек',
+  blind: 'Скрывает график у ВСЕХ на 5 сек',
   steal: 'Крадёт 10% баланса случайного игрока',
   chaos: 'Меняет long/short у ВСЕХ открытых позиций',
 };
@@ -83,7 +83,7 @@ export const ALL_SKILLS: SkillType[] = ['trump_tweet', 'inverse', 'shield', 'dou
 
 export const FREEZE_DURATION = 5;
 export const INVERSE_DURATION = 7;
-export const BLIND_DURATION = 15;
+export const BLIND_DURATION = 5;
 
 // --- Players ---
 export interface Player {
@@ -350,6 +350,7 @@ export interface ClientGameState {
   marketMakerNickname: string | null;
   mmLevers: MMLeverState | null;
   mmBalance: number;
+  blindActive: boolean;
 }
 
 export interface ClientPlayerState {

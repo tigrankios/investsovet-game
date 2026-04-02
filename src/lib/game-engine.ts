@@ -717,7 +717,7 @@ export function useSkill(
     case 'blind':
       // Слепой трейд — скрыть график у ВСЕХ на 15 секунд
       for (const p of game.players) {
-        if (p.connected) p.blindTicksLeft = BLIND_DURATION;
+        if (p.connected && p.id !== playerId) p.blindTicksLeft = BLIND_DURATION;
       }
       return { success: true, message: '🙈 СЛЕПОЙ ТРЕЙД! График скрыт у всех!', skill, affectsAll: true };
 

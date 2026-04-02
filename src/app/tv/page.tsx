@@ -233,7 +233,13 @@ export default function TVPage() {
 
         {/* Chart + Leaderboard */}
         <div className="flex-1 flex">
-          <div className="flex-1 p-4">
+          <div className="flex-1 p-4 relative">
+            {gameState.blindActive ? (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/95 rounded-xl">
+                <span className="text-[120px] leading-none mb-4">🙈</span>
+                <p className="text-5xl font-display font-black text-accent-gold animate-pulse">СЛЕПОЙ ТРЕЙД!</p>
+              </div>
+            ) : null}
             <CandlestickChart candles={candles} positions={leaderboard} />
           </div>
           <div className="w-[500px] border-l border-border p-6 overflow-y-auto">
