@@ -5,7 +5,7 @@ import {
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
   SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION, BLIND_DURATION,
-  INITIAL_BALANCE, MM_INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
+  INITIAL_BALANCE, MM_STARTING_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
 
@@ -400,8 +400,8 @@ export function assignMarketMaker(game: GameState): Player | null {
   if (connected.length === 0) return null;
   const mm = connected[Math.floor(Math.random() * connected.length)];
   mm.role = 'market_maker';
-  mm.balance = MM_INITIAL_BALANCE;
-  mm.maxBalance = MM_INITIAL_BALANCE;
+  mm.balance = MM_STARTING_BALANCE;
+  mm.maxBalance = MM_STARTING_BALANCE;
   game.marketMakerId = mm.id;
   console.log(`[Game] Market Maker assigned: ${mm.nickname}`);
   return mm;
