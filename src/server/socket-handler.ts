@@ -11,7 +11,7 @@ import {
   startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
   assignRandomSkill, useSkill, getFinalStats,
   assignMarketMaker, useMMLever, getMarketMakerResult,
-} from '../lib/game-engine';
+} from '../lib/engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
