@@ -2,47 +2,56 @@
 // InvestSovet — Binary Options Types & Constants
 // ============================================
 
-import type { Candle } from './shared';
-
-// --- Binary Direction ---
+// --- Binary Bet ---
 export type BinaryDirection = 'up' | 'down';
 
-// --- Constants ---
-export const BINARY_MAX_ROUNDS = 20;
-export const BINARY_BET_TIMER_SEC = 5;
-export const BINARY_REVEAL_SEC = 1;
-export const BINARY_CANDLES_COUNT = 5;
-export const BINARY_RESULT_SEC = 2;
-export const BINARY_CHART_HISTORY = 20; // historical candles shown
-export const BINARY_AUTO_BET_PERCENT = 10;
-
-// --- Binary Bet ---
 export interface BinaryBet {
   playerId: string;
-  nickname: string;
   direction: BinaryDirection;
   amount: number;
 }
 
-// --- Binary Round State ---
 export interface BinaryRoundState {
   roundNumber: number;
-  maxRounds: number;
   ticker: string;
-  candles: Candle[];
+  /** All candles: first BINARY_CHART_HISTORY are visible, next BINARY_CANDLES_COUNT are hidden */
+  allCandles: import('./shared').Candle[];
+  /** Price at the moment betting closes (last visible candle's close) */
   entryPrice: number;
+  /** Bets placed this round */
   bets: BinaryBet[];
-  result: BinaryDirection | null;
-  candlesRevealed: number;
-  finalPrice: number | null;
+  /** Pool totals */
   upPool: number;
   downPool: number;
+  /** How many future candles have been revealed so far (0..5) */
+  revealedCount: number;
+  /** Eliminated player IDs (balance <= 0) */
+  eliminatedPlayerIds: Set<string>;
 }
 
-// --- Binary Player State ---
-export interface BinaryPlayerState {
-  balance: number;
-  myBet: BinaryBet | null;
-  eliminated: boolean;
-  lastWin: number | null;
+export interface BinaryPayoutEntry {
+  playerId: string;
+  nickname: string;
+  betDirection: BinaryDirection;
+  betAmount: number;
+  payout: number;      // net gain/loss
+  newBalance: number;
 }
+
+export interface BinaryRoundResult {
+  result: BinaryDirection;
+  entryPrice: number;
+  finalPrice: number;
+  payouts: BinaryPayoutEntry[];
+}
+
+// --- Constants ---
+export const BINARY_CHART_HISTORY = 20;   // visible candles for display
+export const BINARY_CANDLES_COUNT = 5;    // future candles revealed one by one
+export const BINARY_TOTAL_CANDLES = BINARY_CHART_HISTORY + BINARY_CANDLES_COUNT; // 25
+export const BINARY_BET_TIME_SEC = 5;     // seconds to place a bet
+export const BINARY_REVEAL_DELAY_SEC = 1; // delay before reveal starts
+export const BINARY_CANDLE_INTERVAL_SEC = 1; // interval between candle reveals
+export const BINARY_RESULT_DELAY_SEC = 2; // delay after result before next round
+export const BINARY_DEFAULT_BET_PERCENT = 10; // auto-bet: 10% of balance
+export const BINARY_MAX_ROUNDS = 10;      // max rounds before game ends

@@ -4,7 +4,7 @@
 
 import type { SkillType } from './classic';
 import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
-import type { BinaryRoundState } from './binary';
+import type { BinaryRoundState, BinaryDirection, BinaryPayoutEntry } from './binary';
 
 // --- Game Modes ---
 export type GameMode = 'classic' | 'market_maker' | 'binary';
@@ -140,11 +140,11 @@ export type GamePhase =
   | 'trading'          // раунд идёт
   | 'bonus'            // бонусная мини-игра после раунда
   | 'voting'           // голосование за следующую монету
-  | 'finished'         // итоги
-  | 'binary_betting'   // binary: приём ставок
-  | 'binary_reveal'    // binary: раскрытие свечей
-  | 'binary_waiting'   // binary: ожидание между раундами
-  | 'binary_result';   // binary: показ результата
+  | 'binary_betting'   // binary: accepting bets
+  | 'binary_reveal'    // binary: showing bets before candle reveal
+  | 'binary_waiting'   // binary: revealing candles one by one
+  | 'binary_result'    // binary: showing round result
+  | 'finished';        // итоги
 
 export interface VoteState {
   votes: Record<string, boolean>; // playerId -> true=да, false=нет
@@ -197,7 +197,7 @@ export interface GameState {
   mmCasino: MMCasinoState | null;
   mmNextCandleModifier: number;
   // Binary Options mode
-  binaryRound: BinaryRoundState | null;
+  binaryState: BinaryRoundState | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -262,6 +262,12 @@ export interface ClientGameState {
   mmLevers: MMLeverState | null;
   mmBalance: number;
   blindActive: boolean;
+  // Binary Options mode
+  binaryRound: number | null;
+  binaryEntryPrice: number | null;
+  binaryUpPool: number;
+  binaryDownPool: number;
+  binaryRevealedCount: number;
 }
 
 export interface ClientPlayerState {
@@ -303,6 +309,29 @@ export interface ServerToClientEvents {
   mmRentTick: (data: { amount: number; mmBalance: number }) => void;
   mmInactivityPenalty: () => void;
   marketMakerResult: (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => void;
+  // Binary Options events
+  binaryRoundState: (data: {
+    roundNumber: number;
+    ticker: string;
+    visibleCandles: Candle[];
+    entryPrice: number;
+    timer: number;
+    phase: GamePhase;
+  }) => void;
+  binaryBetsRevealed: (data: {
+    bets: { nickname: string; direction: BinaryDirection; amount: number }[];
+    upPool: number;
+    downPool: number;
+  }) => void;
+  binaryCandle: (data: { candle: Candle; index: number; price: number }) => void;
+  binaryResult: (data: {
+    result: BinaryDirection;
+    entryPrice: number;
+    finalPrice: number;
+    payouts: BinaryPayoutEntry[];
+  }) => void;
+  binaryRoundCancelled: (data: { message: string }) => void;
+  playerEliminated: (data: { nickname: string }) => void;
   error: (message: string) => void;
 }
 
@@ -320,6 +349,8 @@ export interface ClientToServerEvents {
   voteNextRound: (data: { vote: boolean }) => void;
   useMMLever: (data: { lever: MMLeverType }) => void;
   mmPush: (data: { direction: 'up' | 'down' }) => void;
+  // Binary Options
+  placeBet: (data: { direction: BinaryDirection }) => void;
 }
 
 // --- Bonus display ---

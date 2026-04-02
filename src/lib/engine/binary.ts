@@ -1,206 +1,254 @@
-import {
-  GameState, Player,
-  BinaryDirection, BinaryBet, BinaryRoundState,
-  BINARY_MAX_ROUNDS, BINARY_AUTO_BET_PERCENT,
-} from '../types';
-import { getPlayer, roundBalance } from './shared';
+// ============================================
+// InvestSovet — Binary Options Engine
+// ============================================
 
-// --- Place a bet for a player ---
+import type { GameState, Player } from '../types';
+import type {
+  BinaryDirection, BinaryBet, BinaryRoundState,
+  BinaryPayoutEntry, BinaryRoundResult,
+} from '../types/binary';
+import {
+  BINARY_DEFAULT_BET_PERCENT,
+  BINARY_MAX_ROUNDS,
+} from '../types/binary';
+import { roundBalance } from './shared';
+
+// --- Bet placement ---
 
 export function placeBinaryBet(
   game: GameState,
   playerId: string,
   direction: BinaryDirection,
-  percent: number,
-): BinaryBet | null {
-  if (game.phase !== 'binary_betting') return null;
-  if (!game.binaryRound) return null;
+): { success: boolean; message: string } {
+  const binary = game.binaryState;
+  if (!binary) return { success: false, message: 'Binary round not active' };
 
-  const player = getPlayer(game, playerId);
-  if (!player) return null;
-  if (!player.connected) return null;
-  if (player.balance <= 0) return null;
+  const player = game.players.find((p) => p.id === playerId);
+  if (!player) return { success: false, message: 'Player not found' };
 
-  // Check if player already bet this round
-  const existingBet = game.binaryRound.bets.find((b) => b.playerId === playerId);
-  if (existingBet) return null;
-
-  // Clamp percent to 1-100
-  const clampedPercent = Math.max(1, Math.min(100, percent));
-  const amount = roundBalance(player.balance * clampedPercent / 100);
-  if (amount <= 0) return null;
-
-  const bet: BinaryBet = {
-    playerId,
-    nickname: player.nickname,
-    direction,
-    amount,
-  };
-
-  game.binaryRound.bets.push(bet);
-
-  // Update pools
-  if (direction === 'up') {
-    game.binaryRound.upPool = roundBalance(game.binaryRound.upPool + amount);
-  } else {
-    game.binaryRound.downPool = roundBalance(game.binaryRound.downPool + amount);
+  if (binary.eliminatedPlayerIds.has(playerId)) {
+    return { success: false, message: 'You are eliminated' };
   }
 
-  return bet;
+  if (binary.bets.some((b) => b.playerId === playerId)) {
+    return { success: false, message: 'Already placed a bet this round' };
+  }
+
+  const amount = roundBalance(player.balance * (BINARY_DEFAULT_BET_PERCENT / 100));
+  if (amount <= 0) return { success: false, message: 'Insufficient balance' };
+
+  const bet: BinaryBet = { playerId, direction, amount };
+  binary.bets.push(bet);
+
+  if (direction === 'up') {
+    binary.upPool += amount;
+  } else {
+    binary.downPool += amount;
+  }
+
+  player.balance = roundBalance(player.balance - amount);
+
+  return {
+    success: true,
+    message: `Bet ${direction.toUpperCase()} $${amount.toFixed(2)}`,
+  };
 }
 
-// --- Auto-bet for players who didn't bet in time ---
+// --- Auto-bet for players who didn't bet ---
 
 export function autoPlaceBets(game: GameState): void {
-  if (!game.binaryRound) return;
+  const binary = game.binaryState;
+  if (!binary) return;
 
-  const activePlayers = game.players.filter((p) => p.connected && p.balance > 0);
-  const bettedIds = new Set(game.binaryRound.bets.map((b) => b.playerId));
+  const activePlayers = game.players.filter(
+    (p) => p.connected && !binary.eliminatedPlayerIds.has(p.id),
+  );
 
   for (const player of activePlayers) {
-    if (bettedIds.has(player.id)) continue;
-
-    const amount = roundBalance(player.balance * BINARY_AUTO_BET_PERCENT / 100);
-    if (amount <= 0) continue;
+    if (binary.bets.some((b) => b.playerId === player.id)) continue;
 
     const direction: BinaryDirection = Math.random() < 0.5 ? 'up' : 'down';
+    const amount = roundBalance(player.balance * (BINARY_DEFAULT_BET_PERCENT / 100));
+    if (amount <= 0) continue;
 
-    const bet: BinaryBet = {
-      playerId: player.id,
-      nickname: player.nickname,
-      direction,
-      amount,
-    };
-
-    game.binaryRound.bets.push(bet);
+    const bet: BinaryBet = { playerId: player.id, direction, amount };
+    binary.bets.push(bet);
 
     if (direction === 'up') {
-      game.binaryRound.upPool = roundBalance(game.binaryRound.upPool + amount);
+      binary.upPool += amount;
     } else {
-      game.binaryRound.downPool = roundBalance(game.binaryRound.downPool + amount);
+      binary.downPool += amount;
     }
+
+    player.balance = roundBalance(player.balance - amount);
   }
 }
 
-// --- Check if all active (non-eliminated) players have bet ---
+// --- Check if all bets are in same direction ---
 
-export function allBetsPlaced(game: GameState): boolean {
-  if (!game.binaryRound) return false;
+export function allBetsSameDirection(game: GameState): boolean {
+  const binary = game.binaryState;
+  if (!binary || binary.bets.length === 0) return false;
 
-  const activePlayers = game.players.filter((p) => p.connected && p.balance > 0);
-  const bettedIds = new Set(game.binaryRound.bets.map((b) => b.playerId));
-
-  return activePlayers.every((p) => bettedIds.has(p.id));
+  const firstDir = binary.bets[0].direction;
+  return binary.bets.every((b) => b.direction === firstDir);
 }
 
-// --- Calculate payouts after round resolves ---
-// Returns map of playerId -> win/loss amount
+// --- Cancel round (return bets) ---
+
+export function cancelRound(game: GameState): void {
+  const binary = game.binaryState;
+  if (!binary) return;
+
+  for (const bet of binary.bets) {
+    const player = game.players.find((p) => p.id === bet.playerId);
+    if (player) {
+      player.balance = roundBalance(player.balance + bet.amount);
+    }
+  }
+
+  binary.bets = [];
+  binary.upPool = 0;
+  binary.downPool = 0;
+}
+
+// --- Calculate payouts (pari-mutuel) ---
 
 export function calculateBinaryPayouts(
-  bets: BinaryBet[],
-  winDirection: BinaryDirection,
-): Map<string, number> {
-  const payouts = new Map<string, number>();
+  game: GameState,
+  result: BinaryDirection,
+): BinaryPayoutEntry[] {
+  const binary = game.binaryState;
+  if (!binary) return [];
 
-  const winPool = bets
-    .filter((b) => b.direction === winDirection)
-    .reduce((sum, b) => sum + b.amount, 0);
-  const losePool = bets
-    .filter((b) => b.direction !== winDirection)
-    .reduce((sum, b) => sum + b.amount, 0);
+  const totalPool = binary.upPool + binary.downPool;
+  const winningPool = result === 'up' ? binary.upPool : binary.downPool;
 
-  for (const bet of bets) {
-    if (bet.direction === winDirection) {
-      // Winner gets proportional share of the losing pool
-      if (winPool > 0) {
-        const share = bet.amount / winPool;
-        const winnings = roundBalance(share * losePool);
-        payouts.set(bet.playerId, winnings);
-      } else {
-        payouts.set(bet.playerId, 0);
-      }
+  const payouts: BinaryPayoutEntry[] = [];
+
+  for (const bet of binary.bets) {
+    const player = game.players.find((p) => p.id === bet.playerId);
+    if (!player) continue;
+
+    if (bet.direction === result) {
+      // Winner gets proportional share of total pool
+      const share = winningPool > 0 ? bet.amount / winningPool : 0;
+      const winnings = roundBalance(totalPool * share);
+      const payout = roundBalance(winnings - bet.amount); // net gain
+
+      payouts.push({
+        playerId: bet.playerId,
+        nickname: player.nickname,
+        betDirection: bet.direction,
+        betAmount: bet.amount,
+        payout,
+        newBalance: roundBalance(player.balance + winnings),
+      });
     } else {
-      // Loser loses their bet amount
-      payouts.set(bet.playerId, -bet.amount);
+      // Loser gets nothing (bet already deducted)
+      payouts.push({
+        playerId: bet.playerId,
+        nickname: player.nickname,
+        betDirection: bet.direction,
+        betAmount: bet.amount,
+        payout: roundBalance(-bet.amount),
+        newBalance: player.balance,
+      });
     }
   }
 
   return payouts;
 }
 
-// --- Apply payouts to player balances, return eliminated players ---
+// --- Apply payouts to player balances ---
 
 export function applyBinaryPayouts(
   game: GameState,
-  payouts: Map<string, number>,
-): string[] {
-  const eliminated: string[] = [];
+  result: BinaryDirection,
+  payouts: BinaryPayoutEntry[],
+): void {
+  const binary = game.binaryState;
+  if (!binary) return;
 
-  for (const [playerId, amount] of payouts) {
-    const player = getPlayer(game, playerId);
+  const totalPool = binary.upPool + binary.downPool;
+  const winningPool = result === 'up' ? binary.upPool : binary.downPool;
+
+  for (const bet of binary.bets) {
+    const player = game.players.find((p) => p.id === bet.playerId);
     if (!player) continue;
 
-    player.balance = roundBalance(player.balance + amount);
-    if (player.balance < 0) player.balance = 0;
+    if (bet.direction === result) {
+      const share = winningPool > 0 ? bet.amount / winningPool : 0;
+      const winnings = roundBalance(totalPool * share);
+      player.balance = roundBalance(player.balance + winnings);
+    }
+    // Losers already had balance deducted when bet was placed
+  }
 
-    // Update stats
-    if (player.balance > player.maxBalance) player.maxBalance = player.balance;
+  // Update stats
+  for (const p of payouts) {
+    const player = game.players.find((pl) => pl.id === p.playerId);
+    if (!player) continue;
     player.totalTrades++;
-    if (amount < player.worstTrade) player.worstTrade = amount;
-    if (amount > player.bestTrade) player.bestTrade = amount;
+    if (p.payout < player.worstTrade) player.worstTrade = p.payout;
+    if (p.payout > player.bestTrade) player.bestTrade = p.payout;
+    if (player.balance > player.maxBalance) player.maxBalance = player.balance;
+  }
+}
 
-    // Check elimination
+// --- Check eliminated players ---
+
+export function checkEliminated(game: GameState): string[] {
+  const binary = game.binaryState;
+  if (!binary) return [];
+
+  const newlyEliminated: string[] = [];
+
+  for (const player of game.players) {
+    if (!player.connected) continue;
+    if (binary.eliminatedPlayerIds.has(player.id)) continue;
     if (player.balance <= 0) {
-      eliminated.push(playerId);
+      binary.eliminatedPlayerIds.add(player.id);
+      newlyEliminated.push(player.id);
     }
   }
 
-  return eliminated;
+  return newlyEliminated;
 }
 
-// --- Check if game should end (1 player left or max rounds) ---
+// --- Should game end ---
 
 export function shouldBinaryGameEnd(game: GameState): boolean {
-  if (!game.binaryRound) return true;
+  const binary = game.binaryState;
+  if (!binary) return true;
 
   // Max rounds reached
-  if (game.binaryRound.roundNumber >= game.binaryRound.maxRounds) return true;
+  if (binary.roundNumber >= BINARY_MAX_ROUNDS) return true;
 
-  // Count players with balance > 0
-  const activePlayers = game.players.filter((p) => p.connected && p.balance > 0);
-  if (activePlayers.length <= 1) return true;
+  // Count active (non-eliminated, connected) players
+  const activePlayers = game.players.filter(
+    (p) => p.connected && !binary.eliminatedPlayerIds.has(p.id) && p.balance > 0,
+  );
 
-  return false;
+  // Need at least 2 active players to continue
+  return activePlayers.length < 2;
 }
 
-// --- Get the winner(s) ---
+// --- Get final stats for binary mode ---
 
-export function getBinaryWinner(game: GameState): Player | null {
-  const activePlayers = game.players
-    .filter((p) => p.connected && p.balance > 0)
-    .sort((a, b) => b.balance - a.balance);
-
-  return activePlayers[0] || null;
-}
-
-// --- Create initial binary round state ---
-
-export function createBinaryRoundState(
-  roundNumber: number,
-  ticker: string,
-  entryPrice: number,
-): BinaryRoundState {
-  return {
-    roundNumber,
-    maxRounds: BINARY_MAX_ROUNDS,
-    ticker,
-    candles: [],
-    entryPrice,
-    bets: [],
-    result: null,
-    candlesRevealed: 0,
-    finalPrice: null,
-    upPool: 0,
-    downPool: 0,
-  };
+export function getBinaryFinalStats(game: GameState): import('../types').FinalPlayerStats[] {
+  return game.players
+    .filter((p) => p.connected)
+    .sort((a, b) => b.balance - a.balance)
+    .map((p, i) => ({
+      nickname: p.nickname,
+      rank: i + 1,
+      balance: roundBalance(p.balance),
+      maxBalance: roundBalance(p.maxBalance),
+      worstTrade: roundBalance(p.worstTrade),
+      bestTrade: roundBalance(p.bestTrade),
+      totalTrades: p.totalTrades,
+      liquidations: p.liquidations,
+      role: p.role as import('../types').PlayerRole,
+    }));
 }
