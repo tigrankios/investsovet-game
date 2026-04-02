@@ -14,7 +14,7 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    voteData, liquidationAlert, bonusData, finalStats,
+    liquidationAlert, bonusData, finalStats,
     createRoom, startGame,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -218,56 +218,6 @@ export default function TVPage() {
         {bonusResults.length === 0 && (
           <p className="text-text-muted text-2xl animate-pulse">Ждём ставки...</p>
         )}
-      </div>
-    );
-  }
-
-  // --- VOTING ---
-  if (phase === 'voting') {
-    const yes = voteData?.yes || gameState.voteYes;
-    const no = voteData?.no || gameState.voteNo;
-    const total = voteData?.total || gameState.voteTotal;
-    const timer = voteData?.timer || gameState.voteTimer;
-
-    return (
-      <div className="h-screen bg-background text-white flex flex-col items-center justify-center">
-        <h1 className="text-5xl font-display font-black text-accent-gold mb-2">РАУНД {gameState.roundNumber} ЗАВЕРШЁН</h1>
-        {roundResult && (
-          <div className="mb-8 text-center">
-            <p className="text-text-secondary text-xl">{roundResult.ticker} — {roundResult.duration}с</p>
-            <p className="text-3xl font-bold text-accent-green mt-2 flex items-center justify-center gap-1">
-              <IconTrophy size={20} /> {roundResult.winner.nickname}: {roundResult.winner.totalPnl >= 0 ? '+' : ''}{roundResult.winner.totalPnl.toFixed(0)}$
-            </p>
-          </div>
-        )}
-
-        <div className="glass-strong border border-border-light rounded-2xl p-10 text-center">
-          <h2 className="text-4xl font-display font-black mb-6">СЛЕДУЮЩИЙ РАУНД?</h2>
-          <div className="flex gap-12 justify-center mb-6">
-            <div className="text-center">
-              <p className="text-6xl font-display font-black text-accent-green">{yes}</p>
-              <p className="text-xl text-accent-green mt-2">ДА</p>
-            </div>
-            <div className="text-center">
-              <p className="text-6xl font-display font-black text-accent-red">{no}</p>
-              <p className="text-xl text-accent-red mt-2">НЕТ</p>
-            </div>
-          </div>
-          <p className="text-text-secondary text-lg">Проголосовало: {yes + no} / {total}</p>
-          <p className="text-accent-gold text-3xl font-mono font-bold mt-4">{timer}с</p>
-        </div>
-
-        {/* Мини-лидерборд */}
-        <div className="mt-8 w-full max-w-xl">
-          {leaderboard.slice(0, 5).map((entry, i) => (
-            <div key={entry.nickname} className="flex justify-between px-4 py-2 text-lg">
-              <span className={i === 0 ? 'text-accent-gold font-bold' : 'text-text-primary'}>
-                {i + 1}. {entry.nickname}
-              </span>
-              <span className="font-mono font-bold">${entry.balance.toFixed(0)}</span>
-            </div>
-          ))}
-        </div>
       </div>
     );
   }

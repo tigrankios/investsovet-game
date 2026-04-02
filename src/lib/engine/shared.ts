@@ -82,6 +82,7 @@ export async function createGame(gameMode: GameMode = 'classic'): Promise<GameSt
     gameMode,
     marketMakerId: null,
     mmCasino: null,
+    mmNextCandleModifier: 0,
   };
 }
 
@@ -303,7 +304,16 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
   game.elapsed++;
 
   if (game.visibleCandleCount <= game.candles.length) {
-    game.currentPrice = game.candles[game.visibleCandleCount - 1].close;
+    const candle = game.candles[game.visibleCandleCount - 1];
+    // Apply MM push modifier if set
+    if (game.mmNextCandleModifier !== 0) {
+      const mod = 1 + game.mmNextCandleModifier;
+      candle.close = roundBalance(candle.close * mod);
+      candle.high = Math.max(candle.high, candle.close);
+      candle.low = Math.min(candle.low, candle.close);
+      game.mmNextCandleModifier = 0;
+    }
+    game.currentPrice = candle.close;
   }
 
   // Decrement effect timers
@@ -607,6 +617,7 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.voteState = null;
   game.bonusState = null;
   game.lastAggressorId = null;
+  game.mmNextCandleModifier = 0;
 
   // Remove lowest leverage (until only 500x remains)
   if (game.availableLeverages.length > 1) {

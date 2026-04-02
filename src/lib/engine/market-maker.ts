@@ -126,9 +126,18 @@ export function useMMLever(
 
 // --- MM Push ---
 
-export function mmPush(game: GameState): void {
-  // Placeholder for MM push functionality
-  // Uses MM_PUSH_MODIFIER from shared
+export function mmPush(
+  game: GameState,
+  playerId: string,
+  direction: 'up' | 'down',
+): { success: boolean; message: string } {
+  if (game.gameMode !== 'market_maker') return { success: false, message: 'Не тот режим' };
+  if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
+  if (game.marketMakerId !== playerId) return { success: false, message: 'Ты не маркет-мейкер' };
+  if (game.mmNextCandleModifier !== 0) return { success: false, message: 'Модификатор уже установлен' };
+
+  game.mmNextCandleModifier = direction === 'up' ? MM_PUSH_MODIFIER : -MM_PUSH_MODIFIER;
+  return { success: true, message: `Push ${direction} applied` };
 }
 
 // --- MM Result ---

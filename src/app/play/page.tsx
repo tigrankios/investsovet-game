@@ -30,9 +30,9 @@ function PlayContent() {
 
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
-    tradeMessage, error, voteData, liquidationAlert,
+    tradeMessage, error, liquidationAlert,
     bonusResult, bonusData, skillAlert, finalStats,
-    joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto,
   } = useClassicGame();
 
   // Reconnect: достаём данные из sessionStorage
@@ -41,7 +41,6 @@ function PlayContent() {
   const [roomCode, setRoomCode] = useState(roomFromUrl);
   const [sizePercent, setSizePercent] = useState(25);
   const [leverage, setLeverage] = useState<Leverage>(25);
-  const [hasVoted, setHasVoted] = useState(false);
   const [bonusBetPercent, setBonusBetPercent] = useState(10);
   const [hasPlayed, setHasPlayed] = useState(false);
   const [animating, setAnimating] = useState(false);
@@ -82,7 +81,6 @@ function PlayContent() {
 
   // Сброс голоса и слотов при новом раунде
   useEffect(() => {
-    setHasVoted(false);
     setHasPlayed(false);
     setAnimating(false);
     setDisplayReels(['?', '?', '?']);
@@ -795,56 +793,6 @@ function PlayContent() {
         )}
 
         <p className="text-text-muted text-sm mt-4">Баланс: ${bonusBalance.toFixed(0)}</p>
-      </div>
-    );
-  }
-
-  // --- VOTING ---
-  if (gameState.phase === 'voting') {
-    const yes = voteData?.yes || gameState.voteYes;
-    const no = voteData?.no || gameState.voteNo;
-    const timer = voteData?.timer || gameState.voteTimer;
-
-    return (
-      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
-        {/* Мой результат за раунд */}
-        {playerState && (
-          <div className="mb-6 text-center">
-            <p className="text-text-secondary">Раунд {gameState.roundNumber}</p>
-            <p className={`text-4xl font-bold mt-2 ${playerState.pnl >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-              {playerState.pnl >= 0 ? '+' : ''}{playerState.pnl.toFixed(2)}$
-            </p>
-            <p className="text-text-secondary mt-1">Баланс: ${playerState.balance.toFixed(0)}</p>
-          </div>
-        )}
-
-        <h2 className="text-3xl font-display font-black mb-6">ЕЩЁ РАУНД?</h2>
-        <p className="text-accent-gold text-2xl font-mono mb-6">{timer}с</p>
-
-        {hasVoted ? (
-          <div className="text-center">
-            <p className="text-2xl text-accent-green font-bold">Голос принят ✓</p>
-            <div className="flex gap-8 mt-4">
-              <p className="text-accent-green text-xl">ДА: {yes}</p>
-              <p className="text-accent-red text-xl">НЕТ: {no}</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-            <button
-              onClick={() => { voteNextRound(true); setHasVoted(true); }}
-              className="bg-accent-green text-white font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
-            >
-              ДА
-            </button>
-            <button
-              onClick={() => { voteNextRound(false); setHasVoted(true); }}
-              className="bg-accent-red text-white font-bold text-2xl py-8 rounded-xl active:scale-95 transition-all"
-            >
-              НЕТ
-            </button>
-          </div>
-        )}
       </div>
     );
   }

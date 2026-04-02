@@ -190,6 +190,7 @@ export interface GameState {
   gameMode: GameMode;
   marketMakerId: string | null;
   mmCasino: MMCasinoState | null;
+  mmNextCandleModifier: number;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -291,6 +292,7 @@ export interface ServerToClientEvents {
   bonusResult: (result: BonusResult) => void;
   bonusUpdate: (data: { timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] }) => void;
   mmLeverUsed: (data: { lever: MMLeverType; duration: number }) => void;
+  mmPushApplied: (data: { direction: 'up' | 'down' }) => void;
   mmRentTick: (data: { amount: number; mmBalance: number }) => void;
   mmInactivityPenalty: () => void;
   marketMakerResult: (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => void;
@@ -310,6 +312,7 @@ export interface ClientToServerEvents {
   playLoto: (data: { bet: number; numbers: number[] }) => void;
   voteNextRound: (data: { vote: boolean }) => void;
   useMMLever: (data: { lever: MMLeverType }) => void;
+  mmPush: (data: { direction: 'up' | 'down' }) => void;
 }
 
 // --- Bonus display ---

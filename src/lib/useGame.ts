@@ -21,7 +21,6 @@ export function useGame() {
   const [error, setError] = useState('');
   const [candles, setCandles] = useState<Candle[]>([]);
   const [currentPrice, setCurrentPrice] = useState(0);
-  const [voteData, setVoteData] = useState<{ yes: number; no: number; total: number; timer: number } | null>(null);
   const [liquidationAlert, setLiquidationAlert] = useState('');
   const [bonusResult, setBonusResult] = useState<BonusResult | null>(null);
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
@@ -37,7 +36,6 @@ export function useGame() {
       candlesRef.current = state.visibleCandles;
       setCandles([...state.visibleCandles]);
       setCurrentPrice(state.currentPrice);
-      if (state.phase !== 'voting') setVoteData(null);
       if (state.phase !== 'bonus') { setBonusResult(null); setBonusData(null); }
       if (state.phase === 'countdown') setRoundResult(null);
     });
@@ -64,8 +62,6 @@ export function useGame() {
       setTimeout(() => setLiquidationAlert(''), 3000);
     });
 
-    socket.on('voteUpdate', (data) => setVoteData(data));
-
     socket.on('gameFinished', (stats) => setFinalStats(stats));
     socket.on('bonusResult', (result) => setBonusResult(result));
     socket.on('bonusUpdate', (data) => setBonusData(data));
@@ -91,7 +87,6 @@ export function useGame() {
       socket.off('roundEnd');
       socket.off('tradeResult');
       socket.off('liquidated');
-      socket.off('voteUpdate');
       socket.off('bonusResult');
       socket.off('bonusUpdate');
       socket.off('gameFinished');
@@ -137,15 +132,11 @@ export function useGame() {
     getSocket().emit('playLoto', { bet, numbers });
   }, []);
 
-  const voteNextRound = useCallback((vote: boolean) => {
-    getSocket().emit('voteNextRound', { vote });
-  }, []);
-
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
-    candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
+    candles, currentPrice, tradeMessage, error, liquidationAlert,
     bonusResult, bonusData, finalStats, priceAlert,
     createRoom, joinRoom, startGame, openPosition, closePosition,
-    spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    spinSlots, spinWheel, openLootbox, playLoto,
   };
 }

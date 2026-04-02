@@ -3,11 +3,14 @@ import type {
   ClientToServerEvents, ServerToClientEvents, GameState, MMLeverType,
 } from '../lib/types';
 import {
+  RENT_INTERVAL_SEC, RENT_AMOUNT, TRADER_INACTIVITY_THRESHOLD_SEC, TRADER_INACTIVITY_RENT_MULTIPLIER,
+} from '../lib/types';
+import {
   endRound,
   startBonus, getBonusResults,
   assignRandomSkill, getFinalStats,
 } from '../lib/engine';
-import { assignMarketMaker, useMMLever, getMarketMakerResult, mmTickCandle, mmSetupNextRound } from '../lib/engine/market-maker';
+import { assignMarketMaker, useMMLever, mmPush, getMarketMakerResult, mmTickCandle, mmSetupNextRound } from '../lib/engine/market-maker';
 import {
   rooms, playerRooms, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
@@ -54,6 +57,19 @@ export function mmStartTrading(io: SocketServer, game: GameState) {
 
       const candleTimer = setInterval(() => {
         const { continues, liquidated } = mmTickCandle(game);
+
+        // Emit rent tick to affected traders
+        if (game.elapsed % RENT_INTERVAL_SEC === 0 && game.mmCasino && game.mmCasino.rentPausedTicksLeft <= 0) {
+          const mm = game.players.find((p) => p.id === game.marketMakerId);
+          for (const player of game.players) {
+            if (player.connected && player.role === 'trader') {
+              const lastOpen = game.mmCasino.traderLastOpenTime[player.id] || 0;
+              const traderInactive = (game.elapsed - lastOpen) >= TRADER_INACTIVITY_THRESHOLD_SEC;
+              const amount = traderInactive ? RENT_AMOUNT * TRADER_INACTIVITY_RENT_MULTIPLIER : RENT_AMOUNT;
+              io.to(player.id).emit('mmRentTick', { amount, mmBalance: mm?.balance ?? 0 });
+            }
+          }
+        }
 
         const idx = game.visibleCandleCount - 1;
         if (idx < game.candles.length) {
@@ -195,6 +211,25 @@ export function registerMMEvents(
   socket: GameSocket,
   io: SocketServer<ClientToServerEvents, ServerToClientEvents>,
 ) {
+  socket.on('mmPush', ({ direction }) => {
+    if (direction !== 'up' && direction !== 'down') {
+      socket.emit('error', 'Invalid direction');
+      return;
+    }
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+    const game = rooms.get(roomCode);
+    if (!game) return;
+
+    const result = mmPush(game, socket.id, direction);
+    if (result.success) {
+      io.to(roomCode).emit('mmPushApplied', { direction });
+      broadcastState(io, game);
+    } else {
+      socket.emit('error', result.message);
+    }
+  });
+
   socket.on('useMMLever', ({ lever }) => {
     if (!['commission', 'freeze', 'squeeze'].includes(lever)) {
       socket.emit('error', 'Invalid lever');
