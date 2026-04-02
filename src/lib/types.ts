@@ -2,6 +2,11 @@
 // InvestSovet — Trading Game Types
 // ============================================
 
+// --- Game Modes ---
+export type GameMode = 'classic' | 'market_maker';
+export type PlayerRole = 'trader' | 'market_maker';
+export const MM_INITIAL_BALANCE = 15000;
+
 // --- Skills (Mario Kart style) ---
 export type SkillType = 'trump_tweet' | 'inverse' | 'shield' | 'double_or_nothing' | 'freeze' | 'blind' | 'steal' | 'chaos';
 
@@ -52,6 +57,7 @@ export interface Player {
   position: Position | null;
   pnl: number; // реализованный PnL за раунд
   connected: boolean;
+  role: PlayerRole;
   skill: SkillType | null;       // текущий скилл (выдаётся в начале раунда)
   skillUsed: boolean;            // использован ли скилл
   // Активные эффекты
@@ -209,6 +215,10 @@ export interface GameState {
   bonusState: BonusState | null;
   lastAggressorId: string | null;
   availableLeverages: Leverage[];
+  // Market Maker mode
+  gameMode: GameMode;
+  marketMakerId: string | null;
+  mmNextCandleModifier: number | null; // 0.5 or -0.5
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -223,6 +233,7 @@ export interface LeaderboardEntry {
   positionLeverage: Leverage | null;
   positionOpenedAt: number | null;
   positionEntryPrice: number | null;
+  role: PlayerRole;
 }
 
 export interface FinalPlayerStats {
@@ -230,6 +241,7 @@ export interface FinalPlayerStats {
   rank: number;
   balance: number;
   maxBalance: number;
+  role: PlayerRole;
   worstTrade: number;
   bestTrade: number;
   totalTrades: number;
@@ -255,11 +267,13 @@ export interface ServerToClientEvents {
   voteUpdate: (data: { yes: number; no: number; total: number; timer: number }) => void;
   bonusResult: (result: BonusResult) => void;
   bonusUpdate: (data: { timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] }) => void;
+  mmPush: (data: { direction: 'up' | 'down' }) => void;
+  marketMakerResult: (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => void;
   error: (message: string) => void;
 }
 
 export interface ClientToServerEvents {
-  createRoom: () => void;
+  createRoom: (data: { gameMode: GameMode }) => void;
   joinRoom: (data: { roomCode: string; nickname: string }) => void;
   startGame: () => void;
   openPosition: (data: { direction: 'long' | 'short'; size: number; leverage: Leverage }) => void;
@@ -270,6 +284,7 @@ export interface ClientToServerEvents {
   openLootbox: (data: { bet: number; chosenIndex: number }) => void;
   playLoto: (data: { bet: number; numbers: number[] }) => void;
   voteNextRound: (data: { vote: boolean }) => void;
+  mmPush: (data: { direction: 'up' | 'down' }) => void;
 }
 
 // --- Client-safe state (без скрытых данных) ---
@@ -290,6 +305,9 @@ export interface ClientGameState {
   bonusTimer: number;
   bonusType: BonusType | null;
   availableLeverages: Leverage[];
+  // Market Maker mode
+  gameMode: GameMode;
+  marketMakerNickname: string | null;
 }
 
 export interface ClientPlayerState {
@@ -302,6 +320,7 @@ export interface ClientPlayerState {
   shieldActive: boolean;
   freezeTicksLeft: number;
   blindTicksLeft: number;
+  role: PlayerRole;
 }
 
 // --- Round Result ---
@@ -312,6 +331,23 @@ export interface RoundResult {
   winner: { nickname: string; totalPnl: number };
   roundNumber: number;
 }
+
+// --- Bonus display ---
+export const BONUS_TITLES: Record<string, string> = {
+  wheel: 'КОЛЕСО ФОРТУНЫ',
+  slots: 'СЛОТ-МАШИНА',
+  lootbox: 'ЛУТБОКС',
+  loto: 'ЛОТО',
+};
+
+export const BONUS_EMOJIS: Record<string, string> = {
+  wheel: '🎡',
+  slots: '🎰',
+  lootbox: '🎁',
+  loto: '🎲',
+};
+
+export const MEDAL_EMOJIS = ['🏆', '🥈', '🥉'] as const;
 
 // --- Constants ---
 export const INITIAL_BALANCE = 10000;

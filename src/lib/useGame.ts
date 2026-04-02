@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
+import {
+  SKILL_NAMES, SKILL_EMOJIS,
+} from './types';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
   RoundResult, Candle, Leverage, BonusResult, BonusType, SkillType, FinalPlayerStats,
+  GameMode,
 } from './types';
 
 export function useGame() {
@@ -23,6 +27,8 @@ export function useGame() {
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
   const [skillAlert, setSkillAlert] = useState('');
   const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
+  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
+  const [mmPushAlert, setMmPushAlert] = useState('');
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -55,7 +61,7 @@ export function useGame() {
     });
 
     socket.on('liquidated', ({ nickname, loss }) => {
-      setLiquidationAlert(`💀 ${nickname} ЛИКВИДИРОВАН! -$${loss.toFixed(0)}`);
+      setLiquidationAlert(`\u{1F480} ${nickname} \u041B\u0418\u041A\u0412\u0418\u0414\u0418\u0420\u041E\u0412\u0410\u041D! -$${loss.toFixed(0)}`);
       setTimeout(() => setLiquidationAlert(''), 3000);
     });
 
@@ -69,19 +75,18 @@ export function useGame() {
       // playerUpdate will carry the skill info
     });
     socket.on('skillUsed', ({ nickname, skill }) => {
-      const names: Record<string, string> = {
-        trump_tweet: '🇺🇸 ТВИТ ТРАМПА',
-        inverse: '🔄 ИНВЕРСИЯ',
-        shield: '🛡️ ЩИТ',
-        double_or_nothing: '💰 ВА-БАНК',
-        freeze: '🧊 ЗАМОРОЗКА',
-        blind: '🙈 СЛЕПОЙ ТРЕЙД',
-        steal: '🦹 КРАЖА',
-        chaos: '🌪️ ХАОС',
-      };
-      setSkillAlert(`${nickname}: ${names[skill] || skill}!`);
+      const emoji = SKILL_EMOJIS[skill as SkillType] || '';
+      const name = SKILL_NAMES[skill as SkillType] || skill;
+      setSkillAlert(`${nickname}: ${emoji} ${name.toUpperCase()}!`);
       setTimeout(() => setSkillAlert(''), 3000);
     });
+
+    socket.on('mmPush', ({ direction }) => {
+      setMmPushAlert(direction === 'up' ? '\u26A1 \u041C\u041C \u0434\u0432\u0438\u0433\u0430\u0435\u0442 \u0440\u044B\u043D\u043E\u043A \u0412\u0412\u0415\u0420\u0425!' : '\u26A1 \u041C\u041C \u0434\u0432\u0438\u0433\u0430\u0435\u0442 \u0440\u044B\u043D\u043E\u043A \u0412\u041D\u0418\u0417!');
+      setTimeout(() => setMmPushAlert(''), 2000);
+    });
+
+    socket.on('marketMakerResult', (data) => setMmResult(data));
 
     socket.on('error', (msg) => {
       setError(msg);
@@ -103,11 +108,15 @@ export function useGame() {
       socket.off('gameFinished');
       socket.off('skillAssigned');
       socket.off('skillUsed');
+      socket.off('mmPush');
+      socket.off('marketMakerResult');
       socket.off('error');
     };
   }, []);
 
-  const createRoom = useCallback(() => getSocket().emit('createRoom'), []);
+  const createRoom = useCallback((gameMode: GameMode = 'classic') => {
+    getSocket().emit('createRoom', { gameMode });
+  }, []);
 
   const joinRoom = useCallback((roomCode: string, nickname: string) => {
     // Сохранить для reconnect
@@ -126,6 +135,10 @@ export function useGame() {
 
   const closePosition = useCallback(() => getSocket().emit('closePosition'), []);
   const usePlayerSkill = useCallback(() => getSocket().emit('useSkill'), []);
+
+  const mmPush = useCallback((direction: 'up' | 'down') => {
+    getSocket().emit('mmPush', { direction });
+  }, []);
 
   const spinSlots = useCallback((bet: number) => {
     getSocket().emit('spinSlots', { bet });
@@ -150,8 +163,8 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, voteData, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats,
+    bonusResult, bonusData, skillAlert, finalStats, mmResult, mmPushAlert,
     createRoom, joinRoom, startGame, openPosition, closePosition, usePlayerSkill,
-    spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    mmPush, spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
   };
 }

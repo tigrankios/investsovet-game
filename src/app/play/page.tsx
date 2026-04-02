@@ -3,8 +3,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGame } from '@/lib/useGame';
-import { SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS } from '@/lib/types';
+import { SKILL_NAMES, SKILL_EMOJIS, SKILL_DESCRIPTIONS, BONUS_TITLES, MEDAL_EMOJIS } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
+import { formatPrice } from '@/lib/utils';
 
 const RANDOM_NICKS = [
   'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
@@ -132,7 +133,7 @@ function PlayContent() {
               onClick={() => setNickname(RANDOM_NICKS[Math.floor(Math.random() * RANDOM_NICKS.length)])}
               className="bg-surface border border-border rounded-xl px-4 text-xl active:scale-95"
             >
-              🎲
+              ?
             </button>
           </div>
           <button
@@ -155,7 +156,7 @@ function PlayContent() {
   if (!gameState || gameState.phase === 'lobby') {
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
-        <div className="text-5xl mb-4 animate-bounce">📈</div>
+        <div className="text-2xl font-display font-bold text-accent-green mb-4 animate-pulse tracking-widest">READY</div>
         <h2 className="text-2xl font-bold">{nickname}</h2>
         <p className="text-text-secondary mt-8 animate-shimmer text-lg">Ждём старта...</p>
         {gameState && <p className="text-text-muted mt-2">Игроков: {gameState.playerCount}</p>}
@@ -173,7 +174,7 @@ function PlayContent() {
         <p className="text-accent-gold text-xl">{gameState.ticker}</p>
         {isMMMode && gameState.roundNumber === 1 && (
           <div className={`mt-4 text-2xl font-display font-black animate-pulse ${isMM ? 'text-accent-gold' : 'text-text-primary'}`}>
-            {isMM ? '👑 ТЫ МАРКЕТ-МЕЙКЕР!' : `⚔️ ТЫ ТРЕЙДЕР vs ${gameState.marketMakerNickname}`}
+            {isMM ? '[MM] ТЫ МАРКЕТ-МЕЙКЕР!' : `[TR] ТЫ ТРЕЙДЕР vs ${gameState.marketMakerNickname}`}
           </div>
         )}
         <div className="text-[120px] font-display font-black text-accent-green animate-countdown leading-none mt-4" style={{ textShadow: '0 0 60px rgba(0,230,118,0.5)' }}>
@@ -261,7 +262,7 @@ function PlayContent() {
             <div className="flex justify-between items-center">
               <div>
                 <span className={`font-bold ${position.direction === 'long' ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {position.direction === 'long' ? '📈 LONG' : '📉 SHORT'} x{position.leverage}
+                  {position.direction === 'long' ? 'LONG' : 'SHORT'} x{position.leverage}
                 </span>
                 <span className="text-text-secondary ml-2">${position.size}</span>
               </div>
@@ -283,20 +284,20 @@ function PlayContent() {
         {playerState.role === 'market_maker' && (
           <div className="mx-4 mt-3">
             <div className="flex items-center justify-center gap-2 mb-2">
-              <span className="text-accent-gold font-bold text-sm">👑 МАРКЕТ-МЕЙКЕР</span>
+              <span className="text-accent-gold font-bold text-sm">[MM] МАРКЕТ-МЕЙКЕР</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => mmPush('up')}
                 className="py-3 rounded-xl font-bold text-lg active:scale-95 transition-all bg-accent-green text-white"
               >
-                📈 +50%
+                UP +50%
               </button>
               <button
                 onClick={() => mmPush('down')}
                 className="py-3 rounded-xl font-bold text-lg active:scale-95 transition-all bg-accent-red text-white"
               >
-                📉 -50%
+                DOWN -50%
               </button>
             </div>
           </div>
@@ -418,13 +419,6 @@ function PlayContent() {
     const bonusBet = Math.floor(bonusBalance * bonusBetPercent / 100);
     const timer = bonusData?.timer || gameState.bonusTimer;
     const bonusType = bonusData?.bonusType || gameState.bonusType;
-
-    const BONUS_TITLES: Record<string, string> = {
-      wheel: 'КОЛЕСО ФОРТУНЫ',
-      slots: 'СЛОТ-МАШИНА',
-      lootbox: 'ЛУТБОКС',
-      loto: 'ЛОТО',
-    };
 
     const SLOT_SYMBOLS_DISPLAY = ['₿', 'Ξ', '🐕', '🚀', '💎', '🌕'];
 
@@ -746,7 +740,6 @@ function PlayContent() {
 
   // --- FINISHED ---
   if (gameState.phase === 'finished') {
-    const medals = ['🏆', '🥈', '🥉'];
     const isMMMode = gameState.gameMode === 'market_maker';
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center p-4 overflow-y-auto">
@@ -774,7 +767,7 @@ function PlayContent() {
               <div key={s.nickname} className={`rounded-xl p-4 ${isMM ? 'bg-accent-gold/10 border border-accent-gold/30' : s.rank === 1 ? 'bg-accent-gold/10 border border-accent-gold/30' : 'glass border border-border'}`}>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xl font-bold">
-                    {s.rank <= 3 ? medals[s.rank - 1] : `${s.rank}.`} {isMM ? '👑 ' : ''}{s.nickname}
+                    {s.rank <= 3 ? MEDAL_EMOJIS[s.rank - 1] : `${s.rank}.`} {isMM ? '👑 ' : ''}{s.nickname}
                   </span>
                   <span className="text-xl font-mono font-bold text-accent-gold">${s.balance.toFixed(0)}</span>
                 </div>
@@ -876,9 +869,3 @@ function MiniChart({ candles, positions = [] }: { candles: Candle[]; positions?:
   );
 }
 
-function formatPrice(price: number): string {
-  if (price < 0.001) return price.toFixed(6);
-  if (price < 1) return price.toFixed(4);
-  if (price < 100) return price.toFixed(2);
-  return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}

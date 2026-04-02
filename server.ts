@@ -18,7 +18,7 @@ app.prepare().then(() => {
   });
 
   const io = new SocketServer(httpServer, {
-    cors: { origin: '*' },
+    cors: { origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'] },
     path: '/api/socketio',
   });
 

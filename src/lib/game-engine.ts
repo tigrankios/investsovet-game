@@ -1,24 +1,65 @@
 import {
-  GameState, Player, Position, LeaderboardEntry, RoundResult, Leverage, VoteState,
+  GameState, GameMode, Player, Position, LeaderboardEntry, RoundResult, Leverage, VoteState,
   BonusState, BonusType, BonusResult, WheelResult, LootboxResult, LotoResult,
   SlotResult, SlotSymbol, SLOT_SYMBOLS,
   WHEEL_SECTORS, LOOTBOX_POOL, BONUS_TIMER_SEC,
   LOTO_NUMBERS_TOTAL, LOTO_PICK_COUNT, LOTO_DRAW_COUNT, LOTO_PAYOUTS,
   SkillType, ALL_SKILLS, FREEZE_DURATION, INVERSE_DURATION, BLIND_DURATION,
-  INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
+  INITIAL_BALANCE, MM_INITIAL_BALANCE, MIN_ROUND_DURATION, MAX_ROUND_DURATION, VOTE_TIMER_SEC, AVAILABLE_LEVERAGES,
 } from './types';
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from './chart-generator';
+
+// --- Constants ---
+
+const LIQUIDATION_BONUS_PERCENT = 0.5;
+const STEAL_PERCENT = 0.1;
+const LOOTBOX_BOX_COUNT = 4;
+const MM_PUSH_MODIFIER = 0.5;
+
+const SLOT_MULTIPLIERS: Record<string, number> = {
+  '₿': 10,   // джекпот
+  '💎': 5,
+  default_triple: 3,
+  pair: 1.5,
+  none: 0,
+};
+
+// --- Helpers ---
+
+function roundBalance(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function validateBonusAction(
+  game: GameState,
+  playerId: string,
+  expectedBonusType: string,
+  bet: number,
+): { success: false; message: string } | { success: true; player: Player } {
+  const player = getPlayer(game, playerId);
+  if (!player) return { success: false, message: 'Игрок не найден' };
+  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
+  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
+  if (game.bonusState.bonusType !== expectedBonusType) {
+    const names: Record<string, string> = { slots: 'слоты', wheel: 'колесо', lootbox: 'лутбокс', loto: 'лото' };
+    return { success: false, message: `Сейчас не ${names[expectedBonusType] || expectedBonusType}` };
+  }
+  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
+  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
+  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+  return { success: true, player };
+}
 
 function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-export async function createGame(): Promise<GameState> {
+export async function createGame(gameMode: GameMode = 'classic'): Promise<GameState> {
   const ticker = getRandomTicker();
   const duration = MIN_ROUND_DURATION + Math.floor(Math.random() * (MAX_ROUND_DURATION - MIN_ROUND_DURATION + 1));
   const candles = await fetchHistoricalCandles(ticker, duration + 20);
 
-  console.log(`[Game] Loaded ${candles.length} historical candles for ${ticker}`);
+  console.log(`[Game] Loaded ${candles.length} historical candles for ${ticker} (mode: ${gameMode})`);
 
   return {
     roomCode: generateRoomCode(),
@@ -35,6 +76,9 @@ export async function createGame(): Promise<GameState> {
     bonusState: null,
     lastAggressorId: null,
     availableLeverages: [...AVAILABLE_LEVERAGES],
+    gameMode,
+    marketMakerId: null,
+    mmNextCandleModifier: null,
   };
 }
 
@@ -46,6 +90,7 @@ export function addPlayer(game: GameState, id: string, nickname: string): Player
     position: null,
     pnl: 0,
     connected: true,
+    role: 'trader',
     skill: null,
     skillUsed: false,
     pnlMultiplier: 1,
@@ -80,6 +125,20 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
 
   game.visibleCandleCount++;
   game.elapsed++;
+
+  // Market Maker: modify candle before it's shown
+  if (game.mmNextCandleModifier !== null && game.visibleCandleCount <= game.candles.length) {
+    const candle = game.candles[game.visibleCandleCount - 1];
+    const modifier = game.mmNextCandleModifier;
+    const delta = candle.close - candle.open;
+    candle.close = candle.open + delta * (1 + modifier);
+    candle.high = candle.open + (candle.high - candle.open) * (1 + modifier);
+    candle.low = candle.open + (candle.low - candle.open) * (1 + modifier);
+    // Ensure high/low bounds are correct
+    candle.high = Math.max(candle.high, candle.open, candle.close);
+    candle.low = Math.min(candle.low, candle.open, candle.close);
+    game.mmNextCandleModifier = null;
+  }
 
   if (game.visibleCandleCount <= game.candles.length) {
     game.currentPrice = game.candles[game.visibleCandleCount - 1].close;
@@ -127,9 +186,9 @@ export function tickCandle(game: GameState): { continues: boolean; liquidated: {
         if (game.lastAggressorId && game.lastAggressorId !== player.id) {
           const aggressor = game.players.find((p) => p.id === game.lastAggressorId);
           if (aggressor && aggressor.connected) {
-            const bonus = Math.round(loss * 0.5 * 100) / 100;
-            aggressor.balance = Math.round((aggressor.balance + bonus) * 100) / 100;
-            aggressor.pnl = Math.round((aggressor.pnl + bonus) * 100) / 100;
+            const bonus = roundBalance(loss * LIQUIDATION_BONUS_PERCENT);
+            aggressor.balance = roundBalance(aggressor.balance + bonus);
+            aggressor.pnl = roundBalance(aggressor.pnl + bonus);
           }
         }
         player.position = null;
@@ -217,7 +276,7 @@ export function closePosition(
 
   const price = player.freezePrice ?? game.currentPrice;
   const basePnl = calculatePnl(player.position, price);
-  const pnl = Math.round(basePnl * player.pnlMultiplier * 100) / 100;
+  const pnl = roundBalance(basePnl * player.pnlMultiplier);
 
   player.balance += pnl;
   player.pnl += pnl;
@@ -250,14 +309,14 @@ export function calculatePnl(position: Position, currentPrice: number): number {
     : position.size * (-priceChange) * position.leverage;
 
   // Не может потерять больше маржи
-  return Math.max(-position.size, Math.round(pnl * 100) / 100);
+  return Math.max(-position.size, roundBalance(pnl));
 }
 
 export function getUnrealizedPnl(player: Player, currentPrice: number): number {
   if (!player.position) return 0;
   const price = player.freezePrice ?? currentPrice;
   const basePnl = calculatePnl(player.position, price);
-  return Math.round(basePnl * player.pnlMultiplier * 100) / 100;
+  return roundBalance(basePnl * player.pnlMultiplier);
 }
 
 export function getLeaderboard(game: GameState): LeaderboardEntry[] {
@@ -267,15 +326,16 @@ export function getLeaderboard(game: GameState): LeaderboardEntry[] {
       const unrealizedPnl = getUnrealizedPnl(p, game.currentPrice);
       return {
         nickname: p.nickname,
-        balance: Math.round((p.balance + unrealizedPnl) * 100) / 100,
+        balance: roundBalance(p.balance + unrealizedPnl),
         pnl: p.pnl,
-        unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
-        totalPnl: Math.round((p.pnl + unrealizedPnl) * 100) / 100,
+        unrealizedPnl: roundBalance(unrealizedPnl),
+        totalPnl: roundBalance(p.pnl + unrealizedPnl),
         hasPosition: !!p.position,
         positionDirection: p.position?.direction || null,
         positionLeverage: p.position?.leverage || null,
         positionOpenedAt: p.position?.openedAt ?? null,
         positionEntryPrice: p.position?.entryPrice ?? null,
+        role: p.role,
       };
     })
     .sort((a, b) => b.balance - a.balance);
@@ -322,18 +382,63 @@ export function getFinalStats(game: GameState): import('./types').FinalPlayerSta
     .map((p, i) => ({
       nickname: p.nickname,
       rank: i + 1,
-      balance: Math.round(p.balance * 100) / 100,
-      maxBalance: Math.round(p.maxBalance * 100) / 100,
-      worstTrade: Math.round(p.worstTrade * 100) / 100,
-      bestTrade: Math.round(p.bestTrade * 100) / 100,
+      balance: roundBalance(p.balance),
+      maxBalance: roundBalance(p.maxBalance),
+      worstTrade: roundBalance(p.worstTrade),
+      bestTrade: roundBalance(p.bestTrade),
       totalTrades: p.totalTrades,
       liquidations: p.liquidations,
+      role: p.role,
     }));
+}
+
+// --- Market Maker ---
+
+export function assignMarketMaker(game: GameState): Player | null {
+  if (game.gameMode !== 'market_maker') return null;
+  const connected = game.players.filter((p) => p.connected);
+  if (connected.length === 0) return null;
+  const mm = connected[Math.floor(Math.random() * connected.length)];
+  mm.role = 'market_maker';
+  mm.balance = MM_INITIAL_BALANCE;
+  mm.maxBalance = MM_INITIAL_BALANCE;
+  game.marketMakerId = mm.id;
+  console.log(`[Game] Market Maker assigned: ${mm.nickname}`);
+  return mm;
+}
+
+export function mmPush(
+  game: GameState,
+  playerId: string,
+  direction: 'up' | 'down',
+): { success: boolean; message: string } {
+  if (game.gameMode !== 'market_maker') return { success: false, message: 'Не тот режим' };
+  if (game.phase !== 'trading') return { success: false, message: 'Раунд не идёт' };
+  if (game.marketMakerId !== playerId) return { success: false, message: 'Ты не маркет-мейкер' };
+  if (game.mmNextCandleModifier !== null) return { success: false, message: 'Уже нажал на этой свече' };
+  game.mmNextCandleModifier = direction === 'up' ? MM_PUSH_MODIFIER : -MM_PUSH_MODIFIER;
+  return { success: true, message: direction === 'up' ? '📈 +50%' : '📉 -50%' };
+}
+
+export function getMarketMakerResult(game: GameState): { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null {
+  if (game.gameMode !== 'market_maker' || !game.marketMakerId) return null;
+  const mm = game.players.find((p) => p.id === game.marketMakerId);
+  if (!mm) return null;
+  const traders = game.players.filter((p) => p.role === 'trader' && p.connected);
+  if (traders.length === 0) return { mmWon: true, mmBalance: mm.balance, tradersAvg: 0, mmNickname: mm.nickname };
+  const tradersAvg = roundBalance(traders.reduce((s, t) => s + t.balance, 0) / traders.length);
+  return {
+    mmWon: mm.balance > tradersAvg,
+    mmBalance: roundBalance(mm.balance),
+    tradersAvg,
+    mmNickname: mm.nickname,
+  };
 }
 
 // --- Скиллы ---
 
-export function assignRandomSkill(player: Player): SkillType {
+export function assignRandomSkill(player: Player): SkillType | null {
+  if (player.role === 'market_maker') return null;
   const skill = ALL_SKILLS[Math.floor(Math.random() * ALL_SKILLS.length)];
   player.skill = skill;
   player.skillUsed = false;
@@ -429,9 +534,9 @@ export function useSkill(
         return { success: true, message: '🦹 КРАЖА! Не у кого красть...', skill };
       }
       const victim = others[Math.floor(Math.random() * others.length)];
-      const stolen = Math.round(victim.balance * 0.1 * 100) / 100;
-      victim.balance = Math.round((victim.balance - stolen) * 100) / 100;
-      player.balance = Math.round((player.balance + stolen) * 100) / 100;
+      const stolen = roundBalance(victim.balance * STEAL_PERCENT);
+      victim.balance = roundBalance(victim.balance - stolen);
+      player.balance = roundBalance(player.balance + stolen);
       return { success: true, message: `🦹 КРАЖА! Украл $${stolen.toFixed(0)} у ${victim.nickname}!`, skill, affectsAll: true };
     }
 
@@ -520,16 +625,14 @@ function getSlotMultiplier(reels: [SlotSymbol, SlotSymbol, SlotSymbol]): number 
 
   // 3 одинаковых
   if (a === b && b === c) {
-    if (a === '₿') return 10;  // джекпот
-    if (a === '💎') return 5;
-    return 3;
+    return SLOT_MULTIPLIERS[a] ?? SLOT_MULTIPLIERS.default_triple;
   }
 
   // 2 одинаковых
-  if (a === b || b === c || a === c) return 1.5;
+  if (a === b || b === c || a === c) return SLOT_MULTIPLIERS.pair;
 
   // Ничего
-  return 0;
+  return SLOT_MULTIPLIERS.none;
 }
 
 export function spinSlots(
@@ -537,26 +640,21 @@ export function spinSlots(
   playerId: string,
   bet: number,
 ): { success: boolean; message: string; result?: BonusResult } {
-  const player = getPlayer(game, playerId);
-  if (!player) return { success: false, message: 'Игрок не найден' };
-  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
-  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
-  if (game.bonusState.bonusType !== 'slots') return { success: false, message: 'Сейчас не слоты' };
-  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
-  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
-  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+  const validation = validateBonusAction(game, playerId, 'slots', bet);
+  if (!validation.success) return validation as { success: false; message: string };
+  const { player } = validation;
 
   const reels: [SlotSymbol, SlotSymbol, SlotSymbol] = [randomSymbol(), randomSymbol(), randomSymbol()];
   const multiplier = getSlotMultiplier(reels);
 
-  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+  const winAmount = multiplier === 0 ? -bet : roundBalance(bet * multiplier - bet);
 
-  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  player.balance = roundBalance(player.balance + winAmount);
   if (player.balance < 0) player.balance = 0;
 
   const slotResult: SlotResult = { reels, multiplier, bet, winAmount };
   const bonusResult: BonusResult = { type: 'slots', result: slotResult };
-  game.bonusState.played[playerId] = bonusResult;
+  game.bonusState!.played[playerId] = bonusResult;
 
   return { success: true, message: `${reels.join(' ')} — x${multiplier}`, result: bonusResult };
 }
@@ -568,26 +666,21 @@ export function spinWheel(
   playerId: string,
   bet: number,
 ): { success: boolean; message: string; result?: BonusResult } {
-  const player = getPlayer(game, playerId);
-  if (!player) return { success: false, message: 'Игрок не найден' };
-  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
-  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
-  if (game.bonusState.bonusType !== 'wheel') return { success: false, message: 'Сейчас не колесо' };
-  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
-  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
-  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+  const validation = validateBonusAction(game, playerId, 'wheel', bet);
+  if (!validation.success) return validation as { success: false; message: string };
+  const { player } = validation;
 
   const sectorIndex = weightedRandomIndex(WHEEL_SECTORS.map((s) => s.weight));
   const multiplier = WHEEL_SECTORS[sectorIndex].multiplier;
 
-  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+  const winAmount = multiplier === 0 ? -bet : roundBalance(bet * multiplier - bet);
 
-  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  player.balance = roundBalance(player.balance + winAmount);
   if (player.balance < 0) player.balance = 0;
 
   const wheelResult: WheelResult = { sectorIndex, multiplier, bet, winAmount };
   const bonusResult: BonusResult = { type: 'wheel', result: wheelResult };
-  game.bonusState.played[playerId] = bonusResult;
+  game.bonusState!.played[playerId] = bonusResult;
 
   return { success: true, message: `Колесо: x${multiplier}`, result: bonusResult };
 }
@@ -596,7 +689,7 @@ export function spinWheel(
 
 function generateLootboxValues(): number[] {
   const boxes: number[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < LOOTBOX_BOX_COUNT; i++) {
     const idx = weightedRandomIndex(LOOTBOX_POOL.map((p) => p.weight));
     boxes.push(LOOTBOX_POOL[idx].multiplier);
   }
@@ -604,7 +697,7 @@ function generateLootboxValues(): number[] {
   // Гарантируем минимум 1 бокс >= x2
   let highFixedIdx = -1;
   if (!boxes.some((m) => m >= 2)) {
-    highFixedIdx = Math.floor(Math.random() * 4);
+    highFixedIdx = Math.floor(Math.random() * LOOTBOX_BOX_COUNT);
     const highPool = LOOTBOX_POOL.filter((p) => p.multiplier >= 2);
     const highIdx = weightedRandomIndex(highPool.map((p) => p.weight));
     boxes[highFixedIdx] = highPool[highIdx].multiplier;
@@ -612,7 +705,7 @@ function generateLootboxValues(): number[] {
 
   // Гарантируем минимум 1 бокс <= x1.5 (не трогая индекс, зафиксированный выше)
   if (!boxes.some((m) => m <= 1.5)) {
-    const candidates = [0, 1, 2, 3].filter((i) => i !== highFixedIdx);
+    const candidates = Array.from({ length: LOOTBOX_BOX_COUNT }, (_, i) => i).filter((i) => i !== highFixedIdx);
     const replaceIdx = candidates[Math.floor(Math.random() * candidates.length)];
     const lowPool = LOOTBOX_POOL.filter((p) => p.multiplier <= 1.5);
     const lowIdx = weightedRandomIndex(lowPool.map((p) => p.weight));
@@ -634,27 +727,22 @@ export function openLootbox(
   bet: number,
   chosenIndex: number,
 ): { success: boolean; message: string; result?: BonusResult } {
-  const player = getPlayer(game, playerId);
-  if (!player) return { success: false, message: 'Игрок не найден' };
-  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
-  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
-  if (game.bonusState.bonusType !== 'lootbox') return { success: false, message: 'Сейчас не лутбокс' };
-  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
-  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
-  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
-  if (!Number.isInteger(chosenIndex) || chosenIndex < 0 || chosenIndex > 3) return { success: false, message: 'Некорректный выбор' };
+  const validation = validateBonusAction(game, playerId, 'lootbox', bet);
+  if (!validation.success) return validation as { success: false; message: string };
+  const { player } = validation;
+  if (!Number.isInteger(chosenIndex) || chosenIndex < 0 || chosenIndex > LOOTBOX_BOX_COUNT - 1) return { success: false, message: 'Некорректный выбор' };
 
   const boxes = generateLootboxValues();
   const multiplier = boxes[chosenIndex];
 
-  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+  const winAmount = multiplier === 0 ? -bet : roundBalance(bet * multiplier - bet);
 
-  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  player.balance = roundBalance(player.balance + winAmount);
   if (player.balance < 0) player.balance = 0;
 
   const lootboxResult: LootboxResult = { boxes, chosenIndex, multiplier, bet, winAmount };
   const bonusResult: BonusResult = { type: 'lootbox', result: lootboxResult };
-  game.bonusState.played[playerId] = bonusResult;
+  game.bonusState!.played[playerId] = bonusResult;
 
   return { success: true, message: `Лутбокс: x${multiplier}`, result: bonusResult };
 }
@@ -678,14 +766,9 @@ export function playLoto(
   bet: number,
   numbers: number[],
 ): { success: boolean; message: string; result?: BonusResult } {
-  const player = getPlayer(game, playerId);
-  if (!player) return { success: false, message: 'Игрок не найден' };
-  if (game.phase !== 'bonus') return { success: false, message: 'Бонус не активен' };
-  if (!game.bonusState) return { success: false, message: 'Бонус не активен' };
-  if (game.bonusState.bonusType !== 'loto') return { success: false, message: 'Сейчас не лото' };
-  if (game.bonusState.played[playerId]) return { success: false, message: 'Уже играл!' };
-  if (bet <= 0) return { success: false, message: 'Некорректная ставка' };
-  if (bet > player.balance) return { success: false, message: 'Недостаточно средств' };
+  const validation = validateBonusAction(game, playerId, 'loto', bet);
+  if (!validation.success) return validation as { success: false; message: string };
+  const { player } = validation;
   if (!Array.isArray(numbers) || numbers.length !== LOTO_PICK_COUNT) return { success: false, message: `Выбери ${LOTO_PICK_COUNT} чисел` };
   const unique = new Set(numbers);
   if (unique.size !== LOTO_PICK_COUNT) return { success: false, message: 'Числа не должны повторяться' };
@@ -697,9 +780,9 @@ export function playLoto(
   const drawnSet = new Set(drawnNumbers);
   const matches = numbers.filter((n) => drawnSet.has(n)).length;
   const multiplier = LOTO_PAYOUTS[matches] ?? 0;
-  const winAmount = multiplier === 0 ? -bet : Math.round((bet * multiplier - bet) * 100) / 100;
+  const winAmount = multiplier === 0 ? -bet : roundBalance(bet * multiplier - bet);
 
-  player.balance = Math.round((player.balance + winAmount) * 100) / 100;
+  player.balance = roundBalance(player.balance + winAmount);
   if (player.balance < 0) player.balance = 0;
 
   const lotoResult: LotoResult = {
@@ -711,7 +794,7 @@ export function playLoto(
     winAmount,
   };
   const bonusResult: BonusResult = { type: 'loto', result: lotoResult };
-  game.bonusState.played[playerId] = bonusResult;
+  game.bonusState!.played[playerId] = bonusResult;
 
   return { success: true, message: `Лото: ${matches} совпадений`, result: bonusResult };
 }
@@ -741,6 +824,7 @@ export async function setupNextRound(game: GameState): Promise<void> {
   game.voteState = null;
   game.bonusState = null;
   game.lastAggressorId = null;
+  game.mmNextCandleModifier = null;
 
   // Убрать наименьшее плечо (пока не останется только 500x)
   if (game.availableLeverages.length > 1) {

@@ -1,13 +1,15 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import type {
-  ClientToServerEvents, ServerToClientEvents, GameState, ClientGameState,
+  ClientToServerEvents, ServerToClientEvents, GameState, ClientGameState, Leverage,
 } from '../lib/types';
+import { AVAILABLE_LEVERAGES } from '../lib/types';
 import {
   createGame, addPlayer, removePlayer, getPlayer,
   tickCandle, openPosition, closePosition, getLeaderboard, endRound,
   getUnrealizedPnl, startVoting, castVote, getVoteResult, setupNextRound,
   startBonus, spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
   assignRandomSkill, useSkill, getFinalStats,
+  assignMarketMaker, mmPush as mmPushEngine, getMarketMakerResult,
 } from '../lib/game-engine';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -19,6 +21,7 @@ const timers = new Map<string, NodeJS.Timeout>();
 
 function getClientGameState(game: GameState): ClientGameState {
   const voteResult = getVoteResult(game);
+  const mm = game.marketMakerId ? game.players.find((p) => p.id === game.marketMakerId) : null;
   return {
     roomCode: game.roomCode,
     phase: game.phase,
@@ -36,6 +39,8 @@ function getClientGameState(game: GameState): ClientGameState {
     bonusTimer: game.bonusState?.timer || 0,
     bonusType: game.bonusState?.bonusType || null,
     availableLeverages: game.availableLeverages,
+    gameMode: game.gameMode,
+    marketMakerNickname: mm?.nickname || null,
   };
 }
 
@@ -60,6 +65,7 @@ function sendPlayerUpdate(io: SocketServer, game: GameState, playerId: string) {
     shieldActive: player.shieldActive,
     freezeTicksLeft: player.freezeTicksLeft,
     blindTicksLeft: player.blindTicksLeft,
+    role: player.role,
   });
 }
 
@@ -71,7 +77,24 @@ function clearTimer(roomCode: string) {
   }
 }
 
+function scheduleRoomCleanup(roomCode: string, game: GameState) {
+  setTimeout(() => {
+    rooms.delete(roomCode);
+    for (const player of game.players) {
+      playerRooms.delete(player.id);
+      playerNicknames.delete(player.id);
+    }
+    clearTimer(roomCode);
+    console.log(`[WS] Room ${roomCode} cleaned up (finished game)`);
+  }, 5 * 60 * 1000);
+}
+
 function startTrading(io: SocketServer, game: GameState) {
+  // Assign Market Maker on first round
+  if (game.gameMode === 'market_maker' && game.roundNumber === 1) {
+    assignMarketMaker(game);
+  }
+
   game.phase = 'countdown';
   broadcastState(io, game);
 
@@ -179,15 +202,29 @@ function startBonusPhase(io: SocketServer, game: GameState) {
 
       // Через 2 секунды — новый раунд или конец игры
       setTimeout(async () => {
-        if (game.roundNumber >= 6) {
+        try {
+          if (game.roundNumber >= 6) {
+            game.phase = 'finished';
+            broadcastState(io, game);
+            broadcastLeaderboard(io, game);
+            io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
+            // Market Maker result
+            const mmResult = getMarketMakerResult(game);
+            if (mmResult) {
+              io.to(game.roomCode).emit('marketMakerResult', mmResult);
+            }
+            // Schedule room cleanup after 5 minutes
+            scheduleRoomCleanup(game.roomCode, game);
+          } else {
+            await setupNextRound(game);
+            broadcastState(io, game);
+            startTrading(io, game);
+          }
+        } catch (err) {
+          console.error('[Game] Failed to setup next round:', err);
           game.phase = 'finished';
           broadcastState(io, game);
-          broadcastLeaderboard(io, game);
-          io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-        } else {
-          await setupNextRound(game);
-          broadcastState(io, game);
-          startTrading(io, game);
+          scheduleRoomCleanup(game.roomCode, game);
         }
       }, 2000);
     }
@@ -224,18 +261,26 @@ function startVotingPhase(io: SocketServer, game: GameState) {
 }
 
 async function resolveVote(io: SocketServer, game: GameState) {
-  const result = getVoteResult(game);
-  if (result.majority) {
-    // Большинство за — новый раунд
-    await setupNextRound(game);
-    broadcastState(io, game);
-    startTrading(io, game);
-  } else {
-    // Большинство против — игра окончена
+  try {
+    const result = getVoteResult(game);
+    if (result.majority) {
+      // Большинство за — новый раунд
+      await setupNextRound(game);
+      broadcastState(io, game);
+      startTrading(io, game);
+    } else {
+      // Большинство против — игра окончена
+      game.phase = 'finished';
+      game.voteState = null;
+      broadcastState(io, game);
+      broadcastLeaderboard(io, game);
+      scheduleRoomCleanup(game.roomCode, game);
+    }
+  } catch (err) {
+    console.error('[Game] Failed to resolve vote:', err);
     game.phase = 'finished';
-    game.voteState = null;
     broadcastState(io, game);
-    broadcastLeaderboard(io, game);
+    scheduleRoomCleanup(game.roomCode, game);
   }
 }
 
@@ -243,8 +288,8 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
   io.on('connection', (socket: GameSocket) => {
     console.log(`[WS] Connected: ${socket.id}`);
 
-    socket.on('createRoom', async () => {
-      const game = await createGame();
+    socket.on('createRoom', async ({ gameMode }) => {
+      const game = await createGame(gameMode);
       rooms.set(game.roomCode, game);
       socket.join(game.roomCode);
       playerRooms.set(socket.id, game.roomCode);
@@ -253,6 +298,16 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('joinRoom', ({ roomCode, nickname }) => {
+      if (typeof roomCode !== 'string' || roomCode.trim().length === 0) {
+        socket.emit('error', 'Invalid room code');
+        return;
+      }
+      if (typeof nickname !== 'string' || nickname.trim().length === 0 || nickname.trim().length > 30) {
+        socket.emit('error', 'Nickname must be 1-30 characters');
+        return;
+      }
+      nickname = nickname.trim();
+
       const game = rooms.get(roomCode);
       if (!game) {
         socket.emit('error', 'Комната не найдена');
@@ -305,6 +360,19 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('openPosition', ({ direction, size, leverage }) => {
+      if (direction !== 'long' && direction !== 'short') {
+        socket.emit('error', 'Invalid direction');
+        return;
+      }
+      if (typeof size !== 'number' || size <= 0 || !isFinite(size)) {
+        socket.emit('error', 'Invalid position size');
+        return;
+      }
+      if (!AVAILABLE_LEVERAGES.includes(leverage as Leverage)) {
+        socket.emit('error', 'Invalid leverage');
+        return;
+      }
+
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
@@ -358,6 +426,10 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('spinSlots', ({ bet }) => {
+      if (typeof bet !== 'number' || bet <= 0 || !isFinite(bet)) {
+        socket.emit('error', 'Invalid bet amount');
+        return;
+      }
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
@@ -379,6 +451,10 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('spinWheel', ({ bet }) => {
+      if (typeof bet !== 'number' || bet <= 0 || !isFinite(bet)) {
+        socket.emit('error', 'Invalid bet amount');
+        return;
+      }
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
@@ -400,6 +476,14 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('openLootbox', ({ bet, chosenIndex }) => {
+      if (typeof bet !== 'number' || bet <= 0 || !isFinite(bet)) {
+        socket.emit('error', 'Invalid bet amount');
+        return;
+      }
+      if (typeof chosenIndex !== 'number' || chosenIndex < 0 || chosenIndex > 3 || !Number.isInteger(chosenIndex)) {
+        socket.emit('error', 'Invalid lootbox choice (must be 0-3)');
+        return;
+      }
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
@@ -421,6 +505,14 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     });
 
     socket.on('playLoto', ({ bet, numbers }) => {
+      if (typeof bet !== 'number' || bet <= 0 || !isFinite(bet)) {
+        socket.emit('error', 'Invalid bet amount');
+        return;
+      }
+      if (!Array.isArray(numbers) || numbers.some((n) => typeof n !== 'number' || !isFinite(n))) {
+        socket.emit('error', 'Invalid loto numbers');
+        return;
+      }
       const roomCode = playerRooms.get(socket.id);
       if (!roomCode) return;
       const game = rooms.get(roomCode);
@@ -453,6 +545,20 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         yes: result.yes, no: result.no, total: result.total,
         timer: game.voteState?.timer || 0,
       });
+    });
+
+    socket.on('mmPush', ({ direction }) => {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return;
+      const game = rooms.get(roomCode);
+      if (!game) return;
+
+      const result = mmPushEngine(game, socket.id, direction);
+      if (result.success) {
+        io.to(roomCode).emit('mmPush', { direction });
+      } else {
+        socket.emit('error', result.message);
+      }
     });
 
     socket.on('disconnect', () => {

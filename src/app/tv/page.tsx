@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
+import { BONUS_TITLES, BONUS_EMOJIS, MEDAL_EMOJIS } from '@/lib/types';
 import type { Candle, LeaderboardEntry, GameMode } from '@/lib/types';
+import { formatPrice } from '@/lib/utils';
 
 // Эпичная музыка — бесплатные треки
 const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3'; // epic cinematic
@@ -226,20 +228,6 @@ export default function TVPage() {
     const bonusType = bonusData?.bonusType || gameState.bonusType;
     const bonusResults = bonusData?.results || [];
 
-    const BONUS_TITLES: Record<string, string> = {
-      wheel: 'КОЛЕСО ФОРТУНЫ',
-      slots: 'СЛОТ-МАШИНА',
-      lootbox: 'ЛУТБОКС',
-      loto: 'ЛОТО',
-    };
-
-    const BONUS_EMOJIS: Record<string, string> = {
-      wheel: '🎡',
-      slots: '🎰',
-      lootbox: '🎁',
-      loto: '🎲',
-    };
-
     return (
       <div className="h-screen bg-background text-white flex flex-col items-center justify-center">
         <div className="text-6xl mb-2">{BONUS_EMOJIS[bonusType || 'slots']}</div>
@@ -343,8 +331,6 @@ export default function TVPage() {
       maxBalance: e.balance, worstTrade: 0, bestTrade: 0, totalTrades: 0, liquidations: 0,
       role: e.role,
     }));
-    const medals = ['🏆', '🥈', '🥉'];
-
     return (
       <div className="h-screen bg-background text-white flex flex-col items-center justify-center overflow-y-auto">
         {/* Market Maker Result */}
@@ -388,7 +374,7 @@ export default function TVPage() {
                 const isMM = isMMMode && s.role === 'market_maker';
                 return (
                   <tr key={s.nickname} className={`border-t border-border ${s.rank === 1 ? 'text-accent-gold text-xl' : 'text-lg'} ${isMM ? 'bg-accent-gold/5' : ''}`}>
-                    <td className="py-4 font-bold">{s.rank <= 3 ? medals[s.rank - 1] : s.rank}</td>
+                    <td className="py-4 font-bold">{s.rank <= 3 ? MEDAL_EMOJIS[s.rank - 1] : s.rank}</td>
                     <td className="py-4 font-bold">
                       {isMM && '👑 '}{s.nickname}
                     </td>
@@ -535,8 +521,7 @@ function CandlestickChart({ candles, positions = [] }: { candles: Candle[]; posi
 }
 
 function LeaderboardRow({ entry, rank, isMMMode = false }: { entry: LeaderboardEntry; rank: number; isMMMode?: boolean }) {
-  const medals = ['🏆', '🥈', '🥉'];
-  const rankDisplay = rank <= 3 ? medals[rank - 1] : `${rank}`;
+  const rankDisplay = rank <= 3 ? MEDAL_EMOJIS[rank - 1] : `${rank}`;
   const medalColors = ['text-accent-gold', 'text-text-secondary', 'text-amber-400'];
   const rankColor = rank <= 3 ? medalColors[rank - 1] : 'text-text-muted';
   const isMM = isMMMode && entry.role === 'market_maker';
@@ -566,9 +551,3 @@ function LeaderboardRow({ entry, rank, isMMMode = false }: { entry: LeaderboardE
   );
 }
 
-function formatPrice(price: number): string {
-  if (price < 0.001) return price.toFixed(6);
-  if (price < 1) return price.toFixed(4);
-  if (price < 100) return price.toFixed(2);
-  return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
