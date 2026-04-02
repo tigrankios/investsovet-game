@@ -54,6 +54,7 @@ function PlayContent() {
   const [sizePercent, setSizePercent] = useState(25);
   const [leverage, setLeverage] = useState<Leverage>(25);
   const [bonusBetPercent, setBonusBetPercent] = useState(10);
+  const [wheelLanded, setWheelLanded] = useState(false);
 
   // Автоматический reconnect
   useEffect(() => {
@@ -81,6 +82,7 @@ function PlayContent() {
 
   // Сброс при новом раунде
   useEffect(() => {
+    setWheelLanded(false);
     // Автовыбор плеча если текущее стало недоступным
     const avail = gameState?.availableLeverages;
     if (avail && avail.length > 0 && !avail.includes(leverage)) {
@@ -437,8 +439,11 @@ function PlayContent() {
     const bonusType = bonusData?.bonusType ?? gameState.bonusType;
 
     // Get win info from any bonus result
-    const winAmount = bonusResult ? bonusResult.result.winAmount : null;
-    const multiplier = bonusResult ? bonusResult.result.multiplier : null;
+    // For wheel: delay showing result until wheel stops spinning
+    const showWheelResult = bonusResult?.type === 'wheel' && wheelLanded;
+    const canShowResult = bonusResult && (bonusResult.type !== 'wheel' || showWheelResult);
+    const winAmount = canShowResult ? bonusResult.result.winAmount : null;
+    const multiplier = canShowResult ? bonusResult.result.multiplier : null;
 
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
@@ -452,6 +457,7 @@ function PlayContent() {
             onSpin={() => spinWheel(bonusBet)}
             resultSectorIndex={bonusResult?.type === 'wheel' ? bonusResult.result.sectorIndex : null}
             disabled={bonusBet <= 0}
+            onLanded={() => setWheelLanded(true)}
           />
         )}
         {bonusType === 'slots' && (

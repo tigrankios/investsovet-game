@@ -17,9 +17,10 @@ interface WheelGameProps {
   onSpin: () => void;
   resultSectorIndex: number | null;
   disabled: boolean;
+  onLanded?: () => void;
 }
 
-export function WheelGame({ onSpin, resultSectorIndex, disabled }: WheelGameProps) {
+export function WheelGame({ onSpin, resultSectorIndex, disabled, onLanded }: WheelGameProps) {
   const [wheelAngle, setWheelAngle] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [landed, setLanded] = useState(false);
@@ -58,6 +59,7 @@ export function WheelGame({ onSpin, resultSectorIndex, disabled }: WheelGameProp
     const timeout = setTimeout(() => {
       setSpinning(false);
       setLanded(true);
+      onLanded?.();
     }, 3000);
 
     return () => clearTimeout(timeout);
