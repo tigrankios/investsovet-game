@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useGame, getSocket } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Candle } from '@/lib/types';
@@ -139,10 +139,23 @@ export default function TVBinaryPage() {
     }
   }, [gameState?.phase]);
 
-  // Auto-create binary room
+  // Auto-create binary room — wait for socket connection to avoid race condition
+  const roomCreatedRef = useRef(false);
   useEffect(() => {
-    if (!gameState) {
+    if (gameState || roomCreatedRef.current) return;
+    const socket = getSocket();
+    if (socket.connected) {
+      roomCreatedRef.current = true;
       createRoom('binary');
+    } else {
+      const onConnect = () => {
+        if (!roomCreatedRef.current) {
+          roomCreatedRef.current = true;
+          createRoom('binary');
+        }
+      };
+      socket.on('connect', onConnect);
+      return () => { socket.off('connect', onConnect); };
     }
   }, [gameState, createRoom]);
 

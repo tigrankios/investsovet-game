@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useBinaryGame } from '@/lib/useBinaryGame';
 import { formatPrice } from '@/lib/utils';
 import type { Candle } from '@/lib/types';
@@ -26,6 +26,7 @@ export default function PlayBinaryPage() {
 
 function PlayBinaryContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const roomFromUrl = searchParams.get('room') || '';
 
   const {
@@ -33,6 +34,7 @@ function PlayBinaryContent() {
     error, finalStats,
     joinRoom,
     binaryRound, myBet, betTimer, lastResult, eliminated, revealedBets,
+    cancelMessage, initialCandleCount,
     placeBet,
   } = useBinaryGame();
 
@@ -65,6 +67,14 @@ function PlayBinaryContent() {
       setRoomCode(roomFromUrl);
     }
   }, [error, joined, gameState, roomFromUrl]);
+
+  // Auto-redirect if wrong game mode
+  useEffect(() => {
+    if (gameState && gameState.gameMode !== 'binary') {
+      const target = gameState.gameMode === 'market_maker' ? '/play-mm' : '/play';
+      router.replace(`${target}?room=${roomCode}`);
+    }
+  }, [gameState?.gameMode, roomCode, router]);
 
   // Trigger result animation
   useEffect(() => {
@@ -253,9 +263,9 @@ function PlayBinaryContent() {
 
   // ─── BINARY WAITING PHASE (candles appearing) ───
   if (binaryRound?.phase === 'waiting') {
-    const candlesRevealed = binaryRound.candles.length;
     const candleTarget = binaryRound.candleTarget;
-    const chartCandles = [...candles, ...binaryRound.candles];
+    const candlesRevealed = Math.max(0, binaryRound.candles.length - initialCandleCount);
+    const chartCandles = binaryRound.candles;
 
     return (
       <div className="min-h-screen bg-background text-white flex flex-col">
@@ -329,7 +339,7 @@ function PlayBinaryContent() {
 
   // ─── BINARY BETTING PHASE ───
   if (binaryRound?.phase === 'betting' && playerState) {
-    const chartCandles = candles.length > 0 ? candles : binaryRound.candles;
+    const chartCandles = binaryRound.candles;
 
     return (
       <div className="min-h-screen bg-background text-white flex flex-col">

@@ -21,6 +21,8 @@ export function useBinaryGame() {
   const [lastResult, setLastResult] = useState<{ direction: BinaryDirection; amount: number } | null>(null);
   const [eliminated, setEliminated] = useState(false);
   const [revealedBets, setRevealedBets] = useState<BinaryRevealedBets | null>(null);
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null);
+  const [initialCandleCount, setInitialCandleCount] = useState(0);
 
   useEffect(() => {
     const socket = getSocket();
@@ -28,9 +30,11 @@ export function useBinaryGame() {
     // New round starts — reset local state
     socket.on('binaryRound', (round: BinaryRoundState) => {
       setBinaryRound(round);
+      setInitialCandleCount(round.candles.length);
       setMyBet(null);
       setLastResult(null);
       setRevealedBets(null);
+      setCancelMessage(null);
     });
 
     // Bets revealed (1s reveal phase)
@@ -72,6 +76,13 @@ export function useBinaryGame() {
       setBetTimer(seconds);
     });
 
+    // Round cancelled (all bets same direction)
+    socket.on('binaryRoundCancelled', (data: { message: string }) => {
+      setMyBet(null);
+      setCancelMessage(data.message);
+      setTimeout(() => setCancelMessage(null), 3000);
+    });
+
     return () => {
       socket.off('binaryRound');
       socket.off('binaryReveal');
@@ -79,6 +90,7 @@ export function useBinaryGame() {
       socket.off('binaryResult');
       socket.off('playerEliminated');
       socket.off('betTimer');
+      socket.off('binaryRoundCancelled');
     };
   }, []);
 
@@ -105,6 +117,8 @@ export function useBinaryGame() {
     lastResult,
     eliminated,
     revealedBets,
+    cancelMessage,
+    initialCandleCount,
     placeBet,
   };
 }

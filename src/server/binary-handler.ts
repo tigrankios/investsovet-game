@@ -130,6 +130,7 @@ function onBettingEnd(roomCode: string, io: SocketServer): void {
   const betsForClient = game.binaryState.bets.map((b) => {
     const player = game.players.find((p) => p.id === b.playerId);
     return {
+      playerId: b.playerId,
       nickname: player?.nickname || '???',
       direction: b.direction,
       amount: b.amount,
@@ -261,7 +262,7 @@ export function registerBinaryEvents(
   socket: GameSocket,
   io: SocketServer<ClientToServerEvents, ServerToClientEvents>,
 ): void {
-  socket.on('placeBet', ({ direction }) => {
+  socket.on('placeBet', ({ direction, percent }) => {
     if (direction !== 'up' && direction !== 'down') {
       socket.emit('error', 'Invalid direction');
       return;
@@ -302,7 +303,7 @@ export function registerBinaryEvents(
       return;
     }
 
-    const result = placeBinaryBet(game, socket.id, direction);
+    const result = placeBinaryBet(game, socket.id, direction, percent);
     if (result.success) {
       socket.emit('tradeResult', result);
       broadcastLeaderboard(io, game);

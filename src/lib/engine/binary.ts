@@ -19,6 +19,7 @@ export function placeBinaryBet(
   game: GameState,
   playerId: string,
   direction: BinaryDirection,
+  percent?: number,
 ): { success: boolean; message: string } {
   const binary = game.binaryState;
   if (!binary) return { success: false, message: 'Binary round not active' };
@@ -34,7 +35,8 @@ export function placeBinaryBet(
     return { success: false, message: 'Already placed a bet this round' };
   }
 
-  const amount = roundBalance(player.balance * (BINARY_DEFAULT_BET_PERCENT / 100));
+  const betPercent = percent != null && percent > 0 && percent <= 100 ? percent : BINARY_DEFAULT_BET_PERCENT;
+  const amount = roundBalance(player.balance * (betPercent / 100));
   if (amount <= 0) return { success: false, message: 'Insufficient balance' };
 
   const bet: BinaryBet = { playerId, direction, amount };
