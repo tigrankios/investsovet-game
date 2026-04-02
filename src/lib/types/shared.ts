@@ -4,7 +4,7 @@
 
 import type { SkillType } from './classic';
 import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
-import type { BinaryRoundState, BinaryRevealedBets, BinaryRoundResult, BinaryDirection } from './binary';
+import type { BinaryRoundStateServer, BinaryRoundState, BinaryRevealedBets, BinaryRoundResult, BinaryDirection } from './binary';
 
 // --- Game Modes ---
 export type GameMode = 'classic' | 'market_maker' | 'binary';
@@ -196,6 +196,8 @@ export interface GameState {
   marketMakerId: string | null;
   mmCasino: MMCasinoState | null;
   mmNextCandleModifier: number;
+  // Binary Options mode
+  binaryState: BinaryRoundStateServer | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -260,6 +262,12 @@ export interface ClientGameState {
   mmLevers: MMLeverState | null;
   mmBalance: number;
   blindActive: boolean;
+  // Binary Options mode
+  binaryRound: number | null;
+  binaryEntryPrice: number | null;
+  binaryUpPool: number;
+  binaryDownPool: number;
+  binaryRevealedCount: number;
 }
 
 export interface ClientPlayerState {
@@ -306,6 +314,7 @@ export interface ServerToClientEvents {
   binaryReveal: (data: BinaryRevealedBets) => void;
   binaryCandle: (data: { candle: Candle }) => void;
   binaryResult: (result: BinaryRoundResult) => void;
+  binaryRoundCancelled: (data: { message: string }) => void;
   playerEliminated: (data: { playerId: string }) => void;
   betTimer: (seconds: number) => void;
   error: (message: string) => void;

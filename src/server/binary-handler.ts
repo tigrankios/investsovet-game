@@ -71,19 +71,22 @@ export async function binaryStartRound(roomCode: string, io: SocketServer): Prom
   game.phase = 'binary_betting';
   broadcastState(io, game);
 
-  io.to(roomCode).emit('binaryRoundState', {
+  io.to(roomCode).emit('binaryRound', {
     roundNumber,
-    ticker,
-    visibleCandles: candles.slice(0, BINARY_CHART_HISTORY),
+    totalRounds: BINARY_MAX_ROUNDS,
+    phase: 'betting' as const,
     entryPrice,
-    timer: BINARY_BET_TIME_SEC,
-    phase: game.phase,
+    candles: candles.slice(0, BINARY_CHART_HISTORY),
+    candleTarget: BINARY_CANDLES_COUNT,
+    ticker,
   });
 
   // Step 3: Start betting timer
   let bettingTimeLeft = BINARY_BET_TIME_SEC;
+  io.to(roomCode).emit('betTimer', bettingTimeLeft);
   const bettingTimer = setInterval(() => {
     bettingTimeLeft--;
+    io.to(roomCode).emit('betTimer', bettingTimeLeft);
 
     if (bettingTimeLeft <= 0) {
       clearInterval(bettingTimer);
@@ -133,7 +136,7 @@ function onBettingEnd(roomCode: string, io: SocketServer): void {
     };
   });
 
-  io.to(roomCode).emit('binaryBetsRevealed', {
+  io.to(roomCode).emit('binaryReveal', {
     bets: betsForClient,
     upPool: game.binaryState.upPool,
     downPool: game.binaryState.downPool,
@@ -177,11 +180,7 @@ function onBettingEnd(roomCode: string, io: SocketServer): void {
       currentGame.visibleCandleCount++;
       currentGame.currentPrice = candle.close;
 
-      io.to(roomCode).emit('binaryCandle', {
-        candle,
-        index: revealIdx,
-        price: candle.close,
-      });
+      io.to(roomCode).emit('binaryCandle', { candle });
 
       broadcastState(io, currentGame);
       candleIndex++;
@@ -213,10 +212,18 @@ function onAllCandlesRevealed(roomCode: string, io: SocketServer): void {
   broadcastState(io, game);
 
   io.to(roomCode).emit('binaryResult', {
-    result,
+    direction: result,
     entryPrice,
     finalPrice,
-    payouts,
+    payouts: payouts.map((p) => ({
+      playerId: p.playerId,
+      nickname: p.nickname,
+      direction: p.betDirection,
+      betAmount: p.betAmount,
+      won: p.payout > 0,
+      payout: p.payout,
+      newBalance: p.newBalance,
+    })),
   });
 
   broadcastLeaderboard(io, game);
@@ -226,7 +233,7 @@ function onAllCandlesRevealed(roomCode: string, io: SocketServer): void {
   for (const playerId of newlyEliminated) {
     const player = game.players.find((p) => p.id === playerId);
     if (player) {
-      io.to(roomCode).emit('playerEliminated', { nickname: player.nickname });
+      io.to(roomCode).emit('playerEliminated', { playerId });
     }
   }
 

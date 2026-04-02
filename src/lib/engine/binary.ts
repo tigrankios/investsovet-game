@@ -4,8 +4,8 @@
 
 import type { GameState, Player } from '../types';
 import type {
-  BinaryDirection, BinaryBet, BinaryRoundState,
-  BinaryPayoutEntry, BinaryRoundResult,
+  BinaryDirection, BinaryBet,
+  BinaryPayoutEntry,
 } from '../types/binary';
 import {
   BINARY_DEFAULT_BET_PERCENT,
