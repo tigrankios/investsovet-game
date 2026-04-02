@@ -65,6 +65,17 @@ function PlayContent() {
     }
   }, [joined, joinRoom]);
 
+  // Если reconnect не удался (ошибка + нет gameState) — сбросить
+  useEffect(() => {
+    if (error && joined && !gameState) {
+      sessionStorage.removeItem('investsovet_room');
+      sessionStorage.removeItem('investsovet_nick');
+      setJoined(false);
+      setNickname('');
+      setRoomCode(roomFromUrl);
+    }
+  }, [error, joined, gameState, roomFromUrl]);
+
   // Сброс голоса и слотов при новом раунде
   useEffect(() => {
     setHasVoted(false);
