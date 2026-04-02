@@ -18,6 +18,7 @@ import {
 } from './shared-state';
 import { classicStartTrading } from './classic-handler';
 import { mmStartTrading, registerMMEvents } from './market-maker-handler';
+import { binaryStartRound, registerBinaryEvents } from './binary-handler';
 
 // Re-export shared state and helpers for backward compatibility
 export {
@@ -105,7 +106,9 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         return;
       }
       console.log(`[WS] Game starting in ${roomCode} (mode: ${game.gameMode})`);
-      if (game.gameMode === 'market_maker') {
+      if (game.gameMode === 'binary') {
+        binaryStartRound(roomCode, io);
+      } else if (game.gameMode === 'market_maker') {
         mmStartTrading(io, game);
       } else {
         classicStartTrading(io, game);
@@ -312,6 +315,7 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
     // --- Mode-specific events ---
 
     registerMMEvents(socket, io);
+    registerBinaryEvents(socket, io);
 
     // --- Disconnect ---
 

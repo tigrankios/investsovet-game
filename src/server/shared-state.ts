@@ -39,6 +39,12 @@ function getClientGameState(game: GameState): ClientGameState {
       ? Math.round((game.players.find((p) => p.id === game.marketMakerId)?.balance || 0) * 100) / 100
       : 0,
     blindActive: game.players.some((p) => p.blindTicksLeft > 0),
+    // Binary Options mode
+    binaryRound: game.binaryState?.roundNumber ?? null,
+    binaryEntryPrice: game.binaryState?.entryPrice ?? null,
+    binaryUpPool: game.binaryState?.upPool ?? 0,
+    binaryDownPool: game.binaryState?.downPool ?? 0,
+    binaryRevealedCount: game.binaryState?.revealedCount ?? 0,
   };
 }
 
