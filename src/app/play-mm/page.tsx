@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useGame } from '@/lib/useGame';
+import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
 import { BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
@@ -32,7 +32,7 @@ function PlayMMContent() {
     tradeMessage, error, liquidationAlert,
     bonusResult, bonusData, finalStats, mmResult, mmLeverAlert, mmRentAlert,
     joinRoom, openPosition, closePosition, useMMLever, spinSlots, spinWheel, openLootbox, playLoto,
-  } = useGame();
+  } = useMarketMakerGame();
 
   const [joined, setJoined] = useState(false);
   const [nickname, setNickname] = useState('');

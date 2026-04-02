@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useGame } from '@/lib/useGame';
+import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
 import { QRCodeSVG } from 'qrcode.react';
 import { BONUS_TITLES } from '@/lib/types';
 import type { Candle, LeaderboardEntry } from '@/lib/types';
@@ -15,7 +15,7 @@ export default function TVMMPage() {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
     liquidationAlert, bonusData, finalStats, mmResult, mmLeverAlert,
     createRoom, startGame,
-  } = useGame();
+  } = useMarketMakerGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Auto-create market_maker room on mount
