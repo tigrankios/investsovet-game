@@ -196,6 +196,23 @@ function PlayContent() {
     );
   }
 
+  // --- ROUND END (between trading end and bonus start) ---
+  if (roundResult && gameState.phase === 'trading' && playerState) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <p className="text-text-secondary text-sm uppercase tracking-wider mb-2">Раунд {roundResult.roundNumber} завершён</p>
+        <p className="text-accent-gold font-display font-bold text-lg mb-6">{roundResult.ticker}</p>
+        <p className={`text-5xl font-display font-black mb-2 ${playerState.pnl >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          {playerState.pnl >= 0 ? '+' : ''}{playerState.pnl.toFixed(0)}$
+        </p>
+        <p className="text-text-secondary font-mono">Баланс: ${playerState.balance.toFixed(0)}</p>
+        <div className="mt-8 w-12 h-1 bg-accent-gold/30 rounded-full overflow-hidden">
+          <div className="h-full bg-accent-gold rounded-full animate-shimmer" />
+        </div>
+      </div>
+    );
+  }
+
   // --- TRADING ---
   if (gameState.phase === 'trading' && playerState) {
     const balance = playerState.balance;
