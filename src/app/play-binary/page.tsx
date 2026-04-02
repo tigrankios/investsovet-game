@@ -42,9 +42,9 @@ function PlayBinaryContent() {
   const [betPercent, setBetPercent] = useState(25);
   const [resultAnimating, setResultAnimating] = useState(false);
 
-  // Auto-reconnect from session
+  // Auto-reconnect from session (only if no room in URL — avoids reusing nick across tabs)
   useEffect(() => {
-    if (joined) return;
+    if (joined || roomFromUrl) return;
     const savedRoom = sessionStorage.getItem('investsovet_room');
     const savedNick = sessionStorage.getItem('investsovet_nick');
     if (savedRoom && savedNick) {
@@ -53,7 +53,7 @@ function PlayBinaryContent() {
       joinRoom(savedRoom, savedNick);
       setJoined(true);
     }
-  }, [joined, joinRoom]);
+  }, [joined, joinRoom, roomFromUrl]);
 
   // Clear stale session on failed reconnect
   useEffect(() => {
