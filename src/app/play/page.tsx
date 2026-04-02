@@ -288,6 +288,31 @@ function PlayContent() {
           </div>
         )}
 
+        {/* Position Awareness Strip */}
+        {gameState.gameMode === 'classic' && (() => {
+          const others = leaderboard.filter(e => e.nickname !== nickname);
+          const longCount = others.filter(e => e.hasPosition && e.positionDirection === 'long').length;
+          const shortCount = others.filter(e => e.hasPosition && e.positionDirection === 'short').length;
+          const idleCount = others.filter(e => !e.hasPosition).length;
+          const groups = [
+            ...(longCount > 0 ? [{ count: longCount, arrow: '\u25B2', label: 'LONG', color: 'text-accent-green' }] : []),
+            ...(shortCount > 0 ? [{ count: shortCount, arrow: '\u25BC', label: 'SHORT', color: 'text-accent-red' }] : []),
+            ...(idleCount > 0 ? [{ count: idleCount, arrow: '\u2014', label: 'IDLE', color: 'text-text-muted' }] : []),
+          ];
+          if (groups.length === 0) return null;
+          return (
+            <div className="mx-2 mt-2 flex items-center justify-center gap-4 py-2 bg-surface rounded-xl border border-border">
+              {groups.map((g, i) => (
+                <div key={g.label} className="flex items-center gap-1.5">
+                  {i > 0 && <div className="w-px h-5 bg-border -ml-2 mr-1.5" />}
+                  <span className={`text-lg font-mono font-bold transition-all duration-300 ${g.color}`}>{g.count}</span>
+                  <span className={`text-xs font-bold uppercase opacity-80 ${g.color}`}>{g.arrow} {g.label}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Position */}
         {position && (
           <div className={`mx-4 mt-2 p-3 rounded-xl border ${
