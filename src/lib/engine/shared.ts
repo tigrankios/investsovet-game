@@ -83,6 +83,7 @@ export async function createGame(gameMode: GameMode = 'classic'): Promise<GameSt
     marketMakerId: null,
     mmCasino: null,
     mmNextCandleModifier: 0,
+    binaryRound: null,
   };
 }
 

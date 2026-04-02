@@ -4,9 +4,10 @@
 
 import type { SkillType } from './classic';
 import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
+import type { BinaryRoundState } from './binary';
 
 // --- Game Modes ---
-export type GameMode = 'classic' | 'market_maker';
+export type GameMode = 'classic' | 'market_maker' | 'binary';
 export type PlayerRole = 'trader' | 'market_maker';
 
 // --- Candle ---
@@ -135,11 +136,15 @@ export const AVAILABLE_LEVERAGES: Leverage[] = [25, 50, 100, 200, 500];
 // --- Game State ---
 export type GamePhase =
   | 'lobby'
-  | 'countdown'   // 3-2-1 перед стартом
-  | 'trading'     // раунд идёт
-  | 'bonus'       // бонусная мини-игра после раунда
-  | 'voting'      // голосование за следующую монету
-  | 'finished';   // итоги
+  | 'countdown'        // 3-2-1 перед стартом
+  | 'trading'          // раунд идёт
+  | 'bonus'            // бонусная мини-игра после раунда
+  | 'voting'           // голосование за следующую монету
+  | 'finished'         // итоги
+  | 'binary_betting'   // binary: приём ставок
+  | 'binary_reveal'    // binary: раскрытие свечей
+  | 'binary_waiting'   // binary: ожидание между раундами
+  | 'binary_result';   // binary: показ результата
 
 export interface VoteState {
   votes: Record<string, boolean>; // playerId -> true=да, false=нет
@@ -191,6 +196,8 @@ export interface GameState {
   marketMakerId: string | null;
   mmCasino: MMCasinoState | null;
   mmNextCandleModifier: number;
+  // Binary Options mode
+  binaryRound: BinaryRoundState | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
