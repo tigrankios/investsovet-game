@@ -526,7 +526,11 @@ function PlayContent() {
           </div>
         )}
 
-        <p className="text-text-muted text-sm mt-4">Баланс: ${bonusBalance.toFixed(0)}</p>
+        {canShowResult || !bonusResult ? (
+          <p className="text-text-muted text-sm mt-4">Баланс: ${bonusBalance.toFixed(0)}</p>
+        ) : (
+          <p className="text-text-muted text-sm mt-4 animate-pulse">...</p>
+        )}
       </div>
     );
   }
