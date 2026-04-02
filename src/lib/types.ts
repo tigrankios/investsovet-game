@@ -82,7 +82,7 @@ export const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
 export const ALL_SKILLS: SkillType[] = ['trump_tweet', 'inverse', 'shield', 'double_or_nothing', 'freeze', 'blind', 'steal', 'chaos'];
 
 export const FREEZE_DURATION = 5;
-export const INVERSE_DURATION = 10;
+export const INVERSE_DURATION = 7;
 export const BLIND_DURATION = 15;
 
 // --- Players ---
@@ -194,7 +194,7 @@ export const LOTO_DRAW_COUNT = 5;
 
 export const LOTO_PAYOUTS: Record<number, number> = {
   0: 0,
-  1: 0.5,
+  1: 1,
   2: 1.5,
   3: 3,
   4: 10,
