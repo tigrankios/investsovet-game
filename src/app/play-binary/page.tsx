@@ -180,6 +180,18 @@ function PlayBinaryContent() {
     );
   }
 
+  // ─── CANCEL MESSAGE (all bet same direction) ───
+  // Shown as a full-screen flash before the next round's betting phase loads
+  if (cancelMessage) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <div className="text-6xl mb-6">&#x1F504;</div>
+        <h2 className="text-2xl font-display font-black text-accent-gold mb-3 text-center">{cancelMessage}</h2>
+        <p className="text-text-secondary text-center">Новый график загружается...</p>
+      </div>
+    );
+  }
+
   // ─── BINARY RESULT OVERLAY ───
   if (binaryRound?.phase === 'result' && lastResult && resultAnimating) {
     const won = lastResult.amount > 0;
