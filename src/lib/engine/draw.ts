@@ -73,7 +73,7 @@ export function generateCandlesFromDrawing(
     const slope = Math.abs(close - open) / startingPrice;
     const volatility = startingPrice * (DRAW_BASE_VOLATILITY + slope * DRAW_SLOPE_FACTOR);
     const high = Math.max(open, close) + Math.random() * volatility;
-    const low = Math.min(open, close) - Math.random() * volatility;
+    const low = Math.max(0.01, Math.min(open, close) - Math.random() * volatility);
 
     candles.push({
       open,
