@@ -7,7 +7,7 @@ import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
 import type { BinaryRoundStateServer, BinaryRoundState, BinaryRevealedBets, BinaryRoundResult, BinaryDirection } from './binary';
 
 // --- Game Modes ---
-export type GameMode = 'classic' | 'market_maker' | 'binary';
+export type GameMode = 'classic' | 'market_maker' | 'binary' | 'draw';
 export type PlayerRole = 'trader' | 'market_maker';
 
 // --- Candle ---
@@ -144,6 +144,8 @@ export type GamePhase =
   | 'binary_reveal'    // binary: ставки раскрыты
   | 'binary_waiting'   // binary: свечи раскрываются
   | 'binary_result'    // binary: результат раунда
+  | 'draw_drawing'     // draw: MM рисует график
+  | 'draw_preview'     // draw: превью первых 5 свечей
   | 'finished';        // итоги
 
 export interface VoteState {
@@ -317,6 +319,10 @@ export interface ServerToClientEvents {
   binaryRoundCancelled: (data: { message: string }) => void;
   playerEliminated: (data: { playerId: string }) => void;
   betTimer: (seconds: number) => void;
+  // Draw mode
+  drawPhase: (data: { timer: number }) => void;
+  drawPreview: (data: { candles: Candle[] }) => void;
+  mmLiquidationBonus: (data: { nickname: string; amount: number }) => void;
   error: (message: string) => void;
 }
 
@@ -336,6 +342,8 @@ export interface ClientToServerEvents {
   mmPush: (data: { direction: 'up' | 'down' }) => void;
   // Binary Options mode
   placeBet: (data: { direction: BinaryDirection; percent: number }) => void;
+  // Draw mode
+  submitDrawing: (data: { points: { x: number; y: number }[] }) => void;
 }
 
 // --- Bonus display ---
