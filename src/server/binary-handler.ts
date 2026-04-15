@@ -17,7 +17,7 @@ import {
 import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from '../lib/chart-generator';
 import {
   rooms, playerRooms, timers,
-  broadcastState, broadcastLeaderboard,
+  broadcastState, broadcastLeaderboard, sendPlayerUpdate,
   clearTimer, scheduleRoomCleanup,
 } from './shared-state';
 
@@ -228,6 +228,13 @@ function onAllCandlesRevealed(roomCode: string, io: SocketServer): void {
   });
 
   broadcastLeaderboard(io, game);
+
+  // Send updated balance to each player
+  for (const player of game.players) {
+    if (player.connected) {
+      sendPlayerUpdate(io, game, player.id);
+    }
+  }
 
   // Step 12: Check eliminated players
   const newlyEliminated = checkEliminated(game);
