@@ -5,9 +5,10 @@
 import type { SkillType } from './classic';
 import type { MMLeverType, MMLeverState, MMCasinoState } from './market-maker';
 import type { BinaryRoundStateServer, BinaryRoundState, BinaryRevealedBets, BinaryRoundResult, BinaryDirection } from './binary';
+import type { DrawRoundState, DrawPoint } from './draw';
 
 // --- Game Modes ---
-export type GameMode = 'classic' | 'market_maker' | 'binary';
+export type GameMode = 'classic' | 'market_maker' | 'binary' | 'draw';
 export type PlayerRole = 'trader' | 'market_maker';
 
 // --- Candle ---
@@ -144,6 +145,8 @@ export type GamePhase =
   | 'binary_reveal'    // binary: ставки раскрыты
   | 'binary_waiting'   // binary: свечи раскрываются
   | 'binary_result'    // binary: результат раунда
+  | 'draw_drawing'     // draw: ММ рисует график
+  | 'draw_preview'     // draw: превью первых свечей
   | 'finished';        // итоги
 
 export interface VoteState {
@@ -198,6 +201,8 @@ export interface GameState {
   mmNextCandleModifier: number;
   // Binary Options mode
   binaryState: BinaryRoundStateServer | null;
+  // Draw mode
+  drawState: DrawRoundState | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -315,6 +320,10 @@ export interface ServerToClientEvents {
   binaryCandle: (data: { candle: Candle }) => void;
   binaryResult: (result: BinaryRoundResult) => void;
   binaryRoundCancelled: (data: { message: string }) => void;
+  // Draw mode
+  drawPhase: (data: { timer: number }) => void;
+  drawPreview: (data: { candles: Candle[] }) => void;
+  mmLiquidationBonus: (data: { nickname: string; amount: number }) => void;
   playerEliminated: (data: { playerId: string }) => void;
   betTimer: (seconds: number) => void;
   error: (message: string) => void;
@@ -336,6 +345,8 @@ export interface ClientToServerEvents {
   mmPush: (data: { direction: 'up' | 'down' }) => void;
   // Binary Options mode
   placeBet: (data: { direction: BinaryDirection; percent: number }) => void;
+  // Draw mode
+  submitDrawing: (data: { points: DrawPoint[] }) => void;
 }
 
 // --- Bonus display ---

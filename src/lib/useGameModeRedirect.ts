@@ -8,6 +8,7 @@ const MODE_ROUTES: Record<GameMode, string> = {
   classic: '/play',
   market_maker: '/play-mm',
   binary: '/play-binary',
+  draw: '/play-draw',
 };
 
 /**
