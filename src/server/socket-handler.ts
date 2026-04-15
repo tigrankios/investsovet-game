@@ -19,6 +19,7 @@ import {
 import { classicStartTrading } from './classic-handler';
 import { mmStartTrading, registerMMEvents } from './market-maker-handler';
 import { binaryStartRound, registerBinaryEvents } from './binary-handler';
+import { drawStartRound, registerDrawEvents } from './draw-handler';
 
 // Re-export shared state and helpers for backward compatibility
 export {
@@ -110,6 +111,8 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         binaryStartRound(roomCode, io);
       } else if (game.gameMode === 'market_maker') {
         mmStartTrading(io, game);
+      } else if (game.gameMode === 'draw') {
+        drawStartRound(roomCode, io);
       } else {
         classicStartTrading(io, game);
       }
@@ -135,6 +138,12 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       if (!roomCode) return;
       const game = rooms.get(roomCode);
       if (!game) return;
+
+      // Draw mode: MM cannot trade
+      if (game.gameMode === 'draw' && socket.id === game.marketMakerId) {
+        socket.emit('tradeResult', { success: false, message: 'ММ не может торговать в Draw режиме' });
+        return;
+      }
 
       const result = game.gameMode === 'market_maker'
         ? mmOpenPosition(game, socket.id, direction, size, leverage)
@@ -316,6 +325,7 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
 
     registerMMEvents(socket, io);
     registerBinaryEvents(socket, io);
+    registerDrawEvents(socket, io);
 
     // --- Disconnect ---
 
