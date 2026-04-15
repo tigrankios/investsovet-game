@@ -418,7 +418,7 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
             io.to(roomCode).emit('gameFinished', getFinalStats(game));
             scheduleRoomCleanup(roomCode, game);
           } else {
-            drawStartVotingPhase(roomCode, io);
+            drawStartRound(roomCode, io);
           }
         } catch (err) {
           console.error('[Draw] Failed to start next round:', err);

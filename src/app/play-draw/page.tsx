@@ -579,49 +579,6 @@ function PlayDrawContent() {
     );
   }
 
-  // --- VOTING PHASE ---
-  if (gameState.phase === 'voting') {
-    return (
-      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
-        <p className="text-text-secondary text-sm uppercase tracking-wider mb-2">
-          Раунд {gameState.drawRoundNumber ?? gameState.roundNumber} / {gameState.drawMaxRounds ?? '?'}
-        </p>
-        <h2 className="text-2xl font-display font-bold text-accent-purple mb-6">Продолжить?</h2>
-
-        <div className="flex gap-4 mb-6">
-          <div className="text-center">
-            <span className="text-accent-green text-3xl font-display font-bold">{gameState.voteYes}</span>
-            <p className="text-text-secondary text-sm">ДА</p>
-          </div>
-          <div className="text-center">
-            <span className="text-text-muted text-3xl font-display font-bold">/</span>
-          </div>
-          <div className="text-center">
-            <span className="text-accent-red text-3xl font-display font-bold">{gameState.voteNo}</span>
-            <p className="text-text-secondary text-sm">НЕТ</p>
-          </div>
-        </div>
-
-        <p className="text-text-secondary mb-6">{gameState.voteTimer}с</p>
-
-        <div className="flex gap-4 w-full max-w-sm">
-          <button
-            onClick={() => voteNextRound(true)}
-            className="flex-1 bg-accent-green/20 border border-accent-green/50 text-accent-green font-display font-bold text-xl py-4 rounded-xl active:scale-95 transition-all"
-          >
-            ДА
-          </button>
-          <button
-            onClick={() => voteNextRound(false)}
-            className="flex-1 bg-accent-red/20 border border-accent-red/50 text-accent-red font-display font-bold text-xl py-4 rounded-xl active:scale-95 transition-all"
-          >
-            НЕТ
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // --- FINISHED ---
   if (gameState.phase === 'finished') {
     return (
