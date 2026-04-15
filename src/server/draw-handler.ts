@@ -99,6 +99,13 @@ export function drawStartRound(roomCode: string, io: SocketServer): void {
   game.phase = 'draw_drawing';
   broadcastState(io, game);
 
+  // Send player updates so clients know their role (MM vs trader)
+  for (const player of game.players) {
+    if (player.connected) {
+      sendPlayerUpdate(io, game, player.id);
+    }
+  }
+
   console.log(`[Draw] Round ${roundNumber} starting in ${roomCode}: price=${startingPrice}`);
 
   // Start drawing timer
