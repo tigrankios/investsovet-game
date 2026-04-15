@@ -226,50 +226,6 @@ export default function TVDrawPage() {
     );
   }
 
-  // --- DRAW PREVIEW PHASE ---
-  if (phase === 'draw_preview') {
-    return (
-      <div className="h-screen bg-background flex flex-col text-white">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-border">
-          <div className="flex items-center gap-4">
-            <span className="text-accent-purple font-display font-bold text-lg tracking-wider">DRAW MODE</span>
-            <span className="text-text-secondary text-lg font-mono">R{gameState.roundNumber}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-accent-gold font-display font-bold text-lg animate-pulse">
-              ПРЕДПРОСМОТР — 5 свечей
-            </span>
-          </div>
-        </div>
-
-        {/* Chart + Sidebar */}
-        <div className="flex-1 flex">
-          <div className="flex-1 p-4">
-            <CandlestickChart candles={previewCandles.length > 0 ? previewCandles : candles} positions={[]} />
-          </div>
-          <div className="w-[450px] border-l border-border p-6 overflow-y-auto">
-            <h3 className="text-text-secondary text-xl font-display font-bold mb-5 uppercase tracking-wider">Лидерборд</h3>
-
-            {mmNickname && (
-              <div className="flex items-center gap-4 rounded-xl px-5 py-3 glass border border-accent-purple/30 mb-4">
-                <span className="text-accent-purple font-bold text-sm px-2 py-0.5 bg-accent-purple/20 rounded">MM</span>
-                <p className="text-white font-semibold text-xl truncate flex-1">{mmNickname}</p>
-                <p className="font-mono font-bold text-xl text-accent-purple">${gameState.mmBalance.toFixed(0)}</p>
-              </div>
-            )}
-
-            <div className="border-t border-border pt-3 space-y-3">
-              {leaderboard.filter(e => e.role !== 'market_maker').map((entry, i) => (
-                <LeaderboardRow key={entry.nickname} entry={entry} rank={i + 1} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // --- COUNTDOWN ---
   if (phase === 'countdown') {
     return (

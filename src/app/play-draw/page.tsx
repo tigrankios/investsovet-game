@@ -175,20 +175,7 @@ function PlayDrawContent() {
   }
 
   // --- DRAW_PREVIEW PHASE ---
-  if (gameState.phase === 'draw_preview') {
-    return (
-      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
-        <p className="text-text-secondary text-sm uppercase tracking-wider mb-2">Раунд {gameState.roundNumber}</p>
-        <p className="text-accent-purple font-display font-bold text-lg mb-4">Предпросмотр</p>
-        {(previewCandles.length > 0 || candles.length > 0) && (
-          <div className="w-full rounded-xl overflow-hidden" style={{ height: '40vw', maxHeight: '220px', minHeight: '140px' }}>
-            <MiniChart candles={previewCandles.length > 0 ? previewCandles : candles} positions={[]} />
-          </div>
-        )}
-        <p className="text-text-muted mt-4 text-sm">5 из 20 свечей</p>
-      </div>
-    );
-  }
+  // draw_preview phase removed — go straight to countdown
 
   // --- COUNTDOWN ---
   if (gameState.phase === 'countdown') {
@@ -663,9 +650,9 @@ function MMDrawingScreen({
     pointsRef.current = points;
   }, [points]);
 
-  // Auto-submit when timer hits 0
+  // Auto-submit when timer hits 1 (gives 1s buffer for network delivery before server processes)
   useEffect(() => {
-    if (drawTimer <= 0 && !submittedRef.current && pointsRef.current.length > 0) {
+    if (drawTimer <= 1 && drawTimer >= 0 && !submittedRef.current && pointsRef.current.length > 0) {
       submittedRef.current = true;
       setSubmitted(true);
       submitDrawing(pointsRef.current);

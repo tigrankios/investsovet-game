@@ -133,7 +133,8 @@ export function drawStartRound(roomCode: string, io: SocketServer): void {
     if (drawTimeLeft <= 0) {
       clearInterval(drawingTimer);
       timers.delete(roomCode);
-      onDrawingComplete(roomCode, io);
+      // Wait 1s for client auto-submit to arrive before processing
+      setTimeout(() => onDrawingComplete(roomCode, io), 1000);
     }
   }, 1000);
 
@@ -166,25 +167,13 @@ function onDrawingComplete(roomCode: string, io: SocketServer): void {
   game.candles = candles;
   game.roundDuration = DRAW_CANDLES_PER_ROUND;
 
-  // Set phase to preview
-  game.phase = 'draw_preview';
+  // No preview — set price from first candle and go straight to countdown
+  game.visibleCandleCount = 0;
+  game.currentPrice = candles[0].open;
 
-  // Show first PREVIEW candles
-  const previewCandles = candles.slice(0, DRAW_PREVIEW_CANDLES);
-  game.visibleCandleCount = DRAW_PREVIEW_CANDLES;
-  game.currentPrice = previewCandles[previewCandles.length - 1].close;
+  console.log(`[Draw] Drawing complete in ${roomCode}, starting countdown`);
 
-  broadcastState(io, game);
-  io.to(roomCode).emit('drawPreview', { candles: previewCandles });
-
-  console.log(`[Draw] Preview phase in ${roomCode}: ${DRAW_PREVIEW_CANDLES} candles shown`);
-
-  // After preview time, start countdown then trading
-  setTimeout(() => {
-    const g = rooms.get(roomCode);
-    if (!g || g.phase === 'finished') return;
-    startDrawCountdown(roomCode, io);
-  }, DRAW_PREVIEW_TIME_SEC * 1000);
+  startDrawCountdown(roomCode, io);
 }
 
 // ---- Countdown before trading ----
@@ -220,7 +209,7 @@ function startDrawTrading(roomCode: string, io: SocketServer): void {
   if (!game || !game.drawState) return;
 
   game.phase = 'trading';
-  game.elapsed = DRAW_PREVIEW_CANDLES; // We've already shown preview candles
+  game.elapsed = 0;
 
   // Assign skills to traders (not MM)
   for (const player of game.players) {
@@ -233,8 +222,8 @@ function startDrawTrading(roomCode: string, io: SocketServer): void {
   broadcastState(io, game);
   broadcastLeaderboard(io, game);
 
-  // Tick remaining candles one by one
-  let candleIndex = DRAW_PREVIEW_CANDLES;
+  // Tick all candles one by one (no preview)
+  let candleIndex = 0;
 
   const candleTimer = setInterval(() => {
     const currentGame = rooms.get(roomCode);
