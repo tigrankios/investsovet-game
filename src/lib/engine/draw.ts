@@ -19,6 +19,7 @@ function mapYToPrice(y: number, startingPrice: number): number {
 
 // --- Resample a path of points to N evenly spaced points along X ---
 function resamplePoints(points: DrawPoint[], count: number): DrawPoint[] {
+  if (count <= 1) return points.length > 0 ? [points[0]] : [{ x: 0.5, y: 0.5 }];
   if (points.length === 0) return [];
   if (points.length === 1) {
     return Array.from({ length: count }, () => ({ ...points[0] }));
@@ -60,6 +61,7 @@ export function generateCandlesFromDrawing(
   startingPrice: number,
   candleCount: number = DRAW_CANDLES_PER_ROUND,
 ): Candle[] {
+  if (candleCount < 1) return [];
   // Resample to candleCount+1 points (we need endpoints for each candle)
   const resampled = resamplePoints(points, candleCount + 1);
   const candles: Candle[] = [];

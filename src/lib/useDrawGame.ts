@@ -76,6 +76,10 @@ export function useDrawGame() {
     getSocket().emit('useSkill');
   }, []);
 
+  const voteNextRound = useCallback((vote: boolean) => {
+    getSocket().emit('voteNextRound', { vote });
+  }, []);
+
   return {
     ...game,
     skillAlert,
@@ -85,5 +89,6 @@ export function useDrawGame() {
     mmLiquidationAlert,
     submitDrawing,
     usePlayerSkill,
+    voteNextRound,
   };
 }

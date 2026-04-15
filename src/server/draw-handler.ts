@@ -2,6 +2,7 @@ import { Server as SocketServer, Socket } from 'socket.io';
 import type {
   ClientToServerEvents, ServerToClientEvents, GameState,
 } from '../lib/types';
+import { INITIAL_BALANCE } from '../lib/types';
 import type { DrawPoint } from '../lib/types/draw';
 import {
   DRAW_CANDLES_PER_ROUND,
@@ -21,6 +22,7 @@ import {
   endRound, startBonus, getBonusResults,
   assignRandomSkill, getFinalStats,
   resetPlayerSkillEffects,
+  startVoting, getVoteResult,
 } from '../lib/engine';
 import { roundBalance, calcLiquidationPrice, isLiquidated } from '../lib/engine/shared';
 import {
@@ -40,13 +42,33 @@ export function drawStartRound(roomCode: string, io: SocketServer): void {
   const game = rooms.get(roomCode);
   if (!game) return;
 
-  // Generate random starting price ($50-$500)
-  const startingPrice = Math.round((50 + Math.random() * 450) * 100) / 100;
-
   // Create or increment round state
   const roundNumber = game.drawState
     ? game.drawState.roundNumber + 1
     : 1;
+
+  // Assign Market Maker on round 1 only
+  if (roundNumber === 1 && !game.marketMakerId) {
+    const connected = game.players.filter((p) => p.connected);
+    if (connected.length === 0) return;
+    const mm = connected[Math.floor(Math.random() * connected.length)];
+    mm.role = 'market_maker';
+    mm.balance = 0;
+    mm.maxBalance = 0;
+    game.marketMakerId = mm.id;
+    // Set other players as traders with initial balance
+    for (const player of game.players) {
+      if (player.id !== mm.id) {
+        player.role = 'trader';
+        player.balance = INITIAL_BALANCE;
+        player.maxBalance = INITIAL_BALANCE;
+      }
+    }
+    console.log(`[Draw] Market Maker assigned: ${mm.nickname}`);
+  }
+
+  // Generate random starting price ($50-$500)
+  const startingPrice = Math.round((50 + Math.random() * 450) * 100) / 100;
 
   game.drawState = createDrawRoundState(roundNumber);
   game.drawState.startingPrice = startingPrice;
@@ -162,9 +184,12 @@ function startDrawCountdown(roomCode: string, io: SocketServer): void {
       io.to(roomCode).emit('countdown', count);
     } else {
       clearInterval(countdownTimer);
+      timers.delete(roomCode);
       startDrawTrading(roomCode, io);
     }
   }, 1000);
+
+  timers.set(roomCode, countdownTimer);
 }
 
 // ---- Trading phase ----
@@ -358,7 +383,7 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
   });
 
   const bonusTimer = setInterval(() => {
-    if (!game.bonusState) { clearInterval(bonusTimer); return; }
+    if (!game.bonusState) { clearInterval(bonusTimer); timers.delete(roomCode); return; }
     game.bonusState.timer--;
 
     io.to(roomCode).emit('bonusUpdate', {
@@ -369,6 +394,7 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
 
     if (game.bonusState.timer <= 0) {
       clearInterval(bonusTimer);
+      timers.delete(roomCode);
       for (const player of game.players) {
         if (player.connected) sendPlayerUpdate(io, game, player.id);
       }
@@ -385,7 +411,7 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
             io.to(roomCode).emit('gameFinished', getFinalStats(game));
             scheduleRoomCleanup(roomCode, game);
           } else {
-            drawStartRound(roomCode, io);
+            drawStartVotingPhase(roomCode, io);
           }
         } catch (err) {
           console.error('[Draw] Failed to start next round:', err);
@@ -396,6 +422,59 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
       }, 2000);
     }
   }, 1000);
+
+  timers.set(roomCode, bonusTimer);
+}
+
+// ---- Voting phase ----
+
+function drawStartVotingPhase(roomCode: string, io: SocketServer): void {
+  const game = rooms.get(roomCode);
+  if (!game || !game.drawState) return;
+
+  startVoting(game);
+  broadcastState(io, game);
+
+  const result = getVoteResult(game);
+  io.to(roomCode).emit('voteUpdate', {
+    yes: result.yes, no: result.no, total: result.total,
+    timer: game.voteState?.timer || 0,
+  });
+
+  const voteTimer = setInterval(() => {
+    if (!game.voteState) { clearInterval(voteTimer); timers.delete(roomCode); return; }
+    game.voteState.timer--;
+
+    const voteResult = getVoteResult(game);
+    io.to(roomCode).emit('voteUpdate', {
+      yes: voteResult.yes, no: voteResult.no, total: voteResult.total,
+      timer: game.voteState.timer,
+    });
+
+    // Check if all players voted or timer expired
+    const allVoted = (voteResult.yes + voteResult.no) >= voteResult.total;
+    if (game.voteState.timer <= 0 || allVoted) {
+      clearInterval(voteTimer);
+      timers.delete(roomCode);
+
+      const finalResult = getVoteResult(game);
+      if (finalResult.majority) {
+        // Majority voted yes → next round
+        setTimeout(() => {
+          drawStartRound(roomCode, io);
+        }, 1000);
+      } else {
+        // Majority voted no or tie → finish game
+        game.phase = 'finished';
+        broadcastState(io, game);
+        broadcastLeaderboard(io, game);
+        io.to(roomCode).emit('gameFinished', getFinalStats(game));
+        scheduleRoomCleanup(roomCode, game);
+      }
+    }
+  }, 1000);
+
+  timers.set(roomCode, voteTimer);
 }
 
 // ---- Finish game early ----

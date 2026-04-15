@@ -273,6 +273,11 @@ export interface ClientGameState {
   binaryUpPool: number;
   binaryDownPool: number;
   binaryRevealedCount: number;
+  // Draw mode
+  drawRoundNumber: number | null;
+  drawMaxRounds: number | null;
+  drawMmEarnings: number;
+  drawLiquidationCount: number;
 }
 
 export interface ClientPlayerState {
