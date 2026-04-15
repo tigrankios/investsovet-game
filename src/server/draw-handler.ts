@@ -47,24 +47,38 @@ export function drawStartRound(roomCode: string, io: SocketServer): void {
     ? game.drawState.roundNumber + 1
     : 1;
 
-  // Assign Market Maker on round 1 only
-  if (roundNumber === 1 && !game.marketMakerId) {
-    const connected = game.players.filter((p) => p.connected);
-    if (connected.length === 0) return;
+  // Rotate Market Maker each round (keep balances)
+  const connected = game.players.filter((p) => p.connected);
+  if (connected.length === 0) return;
+
+  if (roundNumber === 1) {
+    // First round: assign initial balances to everyone, pick random MM
+    for (const player of game.players) {
+      player.balance = INITIAL_BALANCE;
+      player.maxBalance = INITIAL_BALANCE;
+      player.role = 'trader';
+    }
     const mm = connected[Math.floor(Math.random() * connected.length)];
     mm.role = 'market_maker';
-    mm.balance = 0;
-    mm.maxBalance = 0;
     game.marketMakerId = mm.id;
-    // Set other players as traders with initial balance
+    console.log(`[Draw] Round 1 — MM: ${mm.nickname}`);
+  } else {
+    // Subsequent rounds: rotate MM to next player, keep all balances
+    const prevMM = game.players.find((p) => p.id === game.marketMakerId);
+    if (prevMM) prevMM.role = 'trader';
+
+    // Pick next connected player who hasn't been MM recently (round-robin)
+    const prevIndex = connected.findIndex((p) => p.id === game.marketMakerId);
+    const nextIndex = (prevIndex + 1) % connected.length;
+    const newMM = connected[nextIndex];
+    newMM.role = 'market_maker';
+    game.marketMakerId = newMM.id;
+
+    // All others are traders
     for (const player of game.players) {
-      if (player.id !== mm.id) {
-        player.role = 'trader';
-        player.balance = INITIAL_BALANCE;
-        player.maxBalance = INITIAL_BALANCE;
-      }
+      if (player.id !== newMM.id) player.role = 'trader';
     }
-    console.log(`[Draw] Market Maker assigned: ${mm.nickname}`);
+    console.log(`[Draw] Round ${roundNumber} — MM rotated to: ${newMM.nickname}`);
   }
 
   // Generate random starting price ($50-$500)
