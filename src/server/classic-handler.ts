@@ -127,7 +127,11 @@ function classicStartBonusPhase(io: SocketServer, game: GameState) {
   });
 
   const bonusTimer = setInterval(() => {
-    if (!game.bonusState) { clearInterval(bonusTimer); return; }
+    if (!game.bonusState) {
+      clearInterval(bonusTimer);
+      timers.delete(game.roomCode);
+      return;
+    }
     game.bonusState.timer--;
 
     io.to(game.roomCode).emit('bonusUpdate', {
@@ -138,6 +142,7 @@ function classicStartBonusPhase(io: SocketServer, game: GameState) {
 
     if (game.bonusState.timer <= 0) {
       clearInterval(bonusTimer);
+      timers.delete(game.roomCode);
       for (const player of game.players) {
         if (player.connected) sendPlayerUpdate(io, game, player.id);
       }
@@ -165,4 +170,6 @@ function classicStartBonusPhase(io: SocketServer, game: GameState) {
       }, 2000);
     }
   }, 1000);
+
+  timers.set(game.roomCode, bonusTimer);
 }
