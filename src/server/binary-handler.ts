@@ -159,6 +159,7 @@ function onBettingEnd(roomCode: string, io: SocketServer): void {
       const currentGame = rooms.get(roomCode);
       if (!currentGame || !currentGame.binaryState) {
         clearInterval(revealTimer);
+        timers.delete(roomCode);
         return;
       }
 
