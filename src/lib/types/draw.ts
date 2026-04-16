@@ -24,10 +24,8 @@ export interface DrawRoundState {
 
 // --- Constants ---
 export const DRAW_CANDLES_PER_ROUND = 40;
-export const DRAW_PREVIEW_CANDLES = 0;
 export const DRAW_CANDLE_INTERVAL_MS = 1000;
 export const DRAW_DRAWING_TIME_SEC = 15;
-export const DRAW_PREVIEW_TIME_SEC = 3;
 export const DRAW_MAX_ROUNDS = 8;
 export const DRAW_MM_LIQUIDATION_PERCENT = 50;
 export const DRAW_BASE_VOLATILITY = 0.0003; // 0.03% base wick size — tiny wicks, safe for all leverages

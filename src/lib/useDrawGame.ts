@@ -3,12 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useGame, getSocket } from './useGame';
 import { SKILL_NAMES, SKILL_EMOJIS } from './types';
-import type { SkillType, Candle } from './types';
-
-export interface DrawPoint {
-  x: number; // 0-1, normalized X position
-  y: number; // 0-1, normalized Y position (0=top=high price, 1=bottom=low price)
-}
+import type { SkillType, DrawPoint } from './types';
 
 export function useDrawGame() {
   const game = useGame();
@@ -19,7 +14,6 @@ export function useDrawGame() {
   // Draw-specific state
   const [drawTimer, setDrawTimer] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [previewCandles, setPreviewCandles] = useState<Candle[]>([]);
   const [mmLiquidationAlert, setMmLiquidationAlert] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,11 +35,6 @@ export function useDrawGame() {
       setIsDrawing(true);
     });
 
-    socket.on('drawPreview', ({ candles }: { candles: Candle[] }) => {
-      setPreviewCandles(candles);
-      setIsDrawing(false);
-    });
-
     socket.on('mmLiquidationBonus', ({ nickname, amount }: { nickname: string; amount: number }) => {
       setMmLiquidationAlert(`${nickname} ликвидирован! +$${amount.toFixed(0)}`);
       setTimeout(() => setMmLiquidationAlert(null), 3000);
@@ -55,7 +44,6 @@ export function useDrawGame() {
       socket.off('skillAssigned');
       socket.off('skillUsed');
       socket.off('drawPhase');
-      socket.off('drawPreview');
       socket.off('mmLiquidationBonus');
     };
   }, []);
@@ -64,7 +52,6 @@ export function useDrawGame() {
   useEffect(() => {
     if (game.gameState?.phase === 'countdown') {
       setIsDrawing(false);
-      setPreviewCandles([]);
     }
   }, [game.gameState?.phase]);
 
@@ -76,19 +63,13 @@ export function useDrawGame() {
     getSocket().emit('useSkill');
   }, []);
 
-  const voteNextRound = useCallback((vote: boolean) => {
-    getSocket().emit('voteNextRound', { vote });
-  }, []);
-
   return {
     ...game,
     skillAlert,
     drawTimer,
     isDrawing,
-    previewCandles,
     mmLiquidationAlert,
     submitDrawing,
     usePlayerSkill,
-    voteNextRound,
   };
 }

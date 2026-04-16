@@ -45,11 +45,6 @@ function getClientGameState(game: GameState): ClientGameState {
     binaryUpPool: game.binaryState?.upPool ?? 0,
     binaryDownPool: game.binaryState?.downPool ?? 0,
     binaryRevealedCount: game.binaryState?.revealedCount ?? 0,
-    // Draw mode
-    drawRoundNumber: game.drawState?.roundNumber ?? null,
-    drawMaxRounds: game.drawState?.maxRounds ?? null,
-    drawMmEarnings: game.drawState?.mmEarnings ?? 0,
-    drawLiquidationCount: game.drawState?.liquidationCount ?? 0,
   };
 }
 

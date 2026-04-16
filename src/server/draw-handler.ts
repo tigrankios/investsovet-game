@@ -6,10 +6,8 @@ import { INITIAL_BALANCE } from '../lib/types';
 import type { DrawPoint } from '../lib/types/draw';
 import {
   DRAW_CANDLES_PER_ROUND,
-  DRAW_PREVIEW_CANDLES,
   DRAW_CANDLE_INTERVAL_MS,
   DRAW_DRAWING_TIME_SEC,
-  DRAW_PREVIEW_TIME_SEC,
   DRAW_MAX_ROUNDS,
   DRAW_MM_LIQUIDATION_PERCENT,
 } from '../lib/types/draw';
@@ -22,7 +20,6 @@ import {
   endRound, startBonus, getBonusResults,
   assignRandomSkill, getFinalStats,
   resetPlayerSkillEffects,
-  startVoting, getVoteResult,
 } from '../lib/engine';
 import { roundBalance, calcLiquidationPrice, isLiquidated } from '../lib/engine/shared';
 import {
@@ -434,57 +431,6 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
   }, 1000);
 
   timers.set(roomCode, bonusTimer);
-}
-
-// ---- Voting phase ----
-
-function drawStartVotingPhase(roomCode: string, io: SocketServer): void {
-  const game = rooms.get(roomCode);
-  if (!game || !game.drawState) return;
-
-  startVoting(game);
-  broadcastState(io, game);
-
-  const result = getVoteResult(game);
-  io.to(roomCode).emit('voteUpdate', {
-    yes: result.yes, no: result.no, total: result.total,
-    timer: game.voteState?.timer || 0,
-  });
-
-  const voteTimer = setInterval(() => {
-    if (!game.voteState) { clearInterval(voteTimer); timers.delete(roomCode); return; }
-    game.voteState.timer--;
-
-    const voteResult = getVoteResult(game);
-    io.to(roomCode).emit('voteUpdate', {
-      yes: voteResult.yes, no: voteResult.no, total: voteResult.total,
-      timer: game.voteState.timer,
-    });
-
-    // Check if all players voted or timer expired
-    const allVoted = (voteResult.yes + voteResult.no) >= voteResult.total;
-    if (game.voteState.timer <= 0 || allVoted) {
-      clearInterval(voteTimer);
-      timers.delete(roomCode);
-
-      const finalResult = getVoteResult(game);
-      if (finalResult.majority) {
-        // Majority voted yes → next round
-        setTimeout(() => {
-          drawStartRound(roomCode, io);
-        }, 1000);
-      } else {
-        // Majority voted no or tie → finish game
-        game.phase = 'finished';
-        broadcastState(io, game);
-        broadcastLeaderboard(io, game);
-        io.to(roomCode).emit('gameFinished', getFinalStats(game));
-        scheduleRoomCleanup(roomCode, game);
-      }
-    }
-  }, 1000);
-
-  timers.set(roomCode, voteTimer);
 }
 
 // ---- Finish game early ----

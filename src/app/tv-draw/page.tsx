@@ -20,7 +20,6 @@ export default function TVDrawPage() {
 
   // Draw-specific state
   const [drawTimer, setDrawTimer] = useState(0);
-  const [previewCandles, setPreviewCandles] = useState<Candle[]>([]);
   const [mmLiquidationEvent, setMmLiquidationEvent] = useState('');
   const [mmEarnings, setMmEarnings] = useState(0);
 
@@ -32,10 +31,6 @@ export default function TVDrawPage() {
       setDrawTimer(data.timer);
     });
 
-    socket.on('drawPreview', (data: { candles: Candle[] }) => {
-      setPreviewCandles(data.candles);
-    });
-
     socket.on('mmLiquidationBonus', (data: { nickname: string; amount: number }) => {
       setMmEarnings(prev => prev + data.amount);
       setMmLiquidationEvent(`${data.nickname} ликвидирован! MM +$${data.amount.toFixed(0)}`);
@@ -44,7 +39,6 @@ export default function TVDrawPage() {
 
     return () => {
       socket.off('drawPhase');
-      socket.off('drawPreview');
       socket.off('mmLiquidationBonus');
     };
   }, []);
@@ -53,7 +47,6 @@ export default function TVDrawPage() {
   useEffect(() => {
     if (gameState?.phase === 'countdown' || gameState?.phase === 'draw_drawing') {
       setMmEarnings(0);
-      setPreviewCandles([]);
     }
   }, [gameState?.phase]);
 
