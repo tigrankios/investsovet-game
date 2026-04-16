@@ -7,18 +7,17 @@ Fourth game mode: "Draw Mode". One player is the Market Maker who draws the pric
 ## Core Asymmetry
 
 - **MM knows the future** — they drew it
-- **Traders see first 5 candles** as preview, then remaining 15 candles reveal one-by-one
+- **Traders see candles reveal one-by-one** during the trading phase
 - **MM's income = liquidation bounty** — motivated to draw traps, fakeouts, reversals
 
-## Round Flow (~30s cycle)
+## Round Flow
 
-1. **Drawing phase** (10s) — MM draws a line on their phone screen (touch canvas). Other players see "MM рисует график..." on their phones, TV shows waiting screen.
-2. **Preview phase** (2s) — First 5 of 20 generated candles shown to everyone. Traders see the setup.
-3. **Countdown** (3s) — 3-2-1 before trading starts.
-4. **Trading phase** (20s) — 20 candles at 1s each. First 5 already visible, remaining 15 appear one-by-one. Full Classic mechanics: leverage (25-500x), positions, skills, liquidations.
-5. **Round result** (3s) — Leaderboard update, MM earnings shown.
-6. **Bonus phase** — Same rotating mini-games as Classic (every round).
-7. **Voting** — After each round, vote to continue. Max 10-12 rounds.
+1. **Drawing phase** (15s) — MM draws a line on their phone screen (touch canvas). Other players see "MM рисует график..." on their phones, TV shows waiting screen.
+2. **Countdown** (3s) — 3-2-1 before trading starts.
+3. **Trading phase** (40s) — 40 candles at 1s each. Candles appear one-by-one. Full Classic mechanics: leverage (25-500x), positions, skills, liquidations.
+4. **Round result** (3s) — Leaderboard update, MM earnings shown.
+5. **Bonus phase** — Same rotating mini-games as Classic (every round).
+6. **Next round** — Automatically proceeds to the next round. Max 8 rounds.
 
 ## Candle Generation Algorithm
 
@@ -26,8 +25,8 @@ Fourth game mode: "Draw Mode". One player is the Market Maker who draws the pric
 MM draws a line on a canvas (touch events → array of {x, y} points normalized to 0-1 range).
 
 ### Processing
-1. **Resample** the drawn line to exactly 21 evenly-spaced points along X axis (0 to 20 segments → 20 candles)
-2. **Map Y to price**: Y range [0,1] maps to price range. Starting price is random (e.g., $100). Y=0 → price + 50%, Y=1 → price - 50%. So the canvas is inverted (draw up = price goes up visually).
+1. **Resample** the drawn line to exactly 41 evenly-spaced points along X axis (0 to 40 segments → 40 candles)
+2. **Map Y to price**: Y range [0,1] maps to price range. Starting price is random (e.g., $100). Y=0 → price + 10%, Y=1 → price - 10%. So the canvas is inverted (draw up = price goes up visually).
 3. **Generate candles** from segments:
    - For segment i (point[i] to point[i+1]):
    - `open = priceFromY(point[i].y)`
@@ -37,11 +36,11 @@ MM draws a line on a canvas (touch events → array of {x, y} points normalized 
    - `high = max(open, close) + random(0, volatility)`
    - `low = min(open, close) - random(0, volatility)`
    - Ensure `high >= max(open, close)` and `low <= min(open, close)`
-4. **Auto-draw fallback**: If MM doesn't draw in 10s, generate random candles (same as Classic chart-generator).
+4. **Auto-draw fallback**: If MM doesn't draw in 15s, generate random candles (same as Classic chart-generator).
 
 ### Parameters
-- `baseVolatility`: 0.2% of price — minimum wick size
-- `slopeFactor`: 1.5 — how much slope amplifies wicks
+- `baseVolatility`: 0.03% of price — minimum wick size (tiny wicks, safe for all leverages)
+- `slopeFactor`: 0.03 — minimal slope amplification
 - Starting price: random $50-$500
 
 ## MM Economics
@@ -69,7 +68,7 @@ Identical to Classic mode:
 
 ## Mobile Screen — MM (Drawing)
 
-### Drawing Phase (10s)
+### Drawing Phase (15s)
 ```
 ┌─────────────────────────────┐
 │ MM DRAW     ⏱ 8s    R1/12  │
@@ -114,8 +113,7 @@ Identical to Classic mode:
 ## Mobile Screen — Traders
 
 Same as Classic mode play page but:
-- First 5 candles visible from start (preview phase)
-- Remaining 15 appear 1 per second
+- Candles appear 1 per second during the trading phase
 - Skills work identically
 - Position awareness strip shows other players
 
@@ -170,8 +168,7 @@ Follows existing modular pattern:
 
 ### New Phases
 - `'draw_drawing'` — MM is drawing
-- `'draw_preview'` — first 5 candles shown
-- Then standard `'countdown'` → `'trading'` → `'bonus'` → `'voting'`
+- Then standard `'countdown'` → `'trading'` → `'bonus'`
 
 ### New Socket Events
 Client → Server:
@@ -179,7 +176,6 @@ Client → Server:
 
 Server → Client:
 - `drawPhase` → `{ timer: number }` — drawing phase countdown
-- `drawPreview` → `{ candles: Candle[] }` — first 5 candles preview
 - `mmLiquidationBonus` → `{ nickname: string, amount: number }` — MM gets notified of earnings
 
 ### Drawing Canvas Component
@@ -203,7 +199,7 @@ interface DrawRoundState {
   roundNumber: number;
   maxRounds: number;
   drawingPoints: DrawPoint[] | null; // null until MM submits
-  generatedCandles: Candle[]; // all 20 candles (server only)
+  generatedCandles: Candle[]; // all 40 candles (server only)
   visibleCandleCount: number; // how many candles revealed so far
   startingPrice: number;
   mmEarnings: number; // total MM earnings this round
@@ -211,15 +207,13 @@ interface DrawRoundState {
 }
 
 // Candle generation config
-const DRAW_CANDLES_PER_ROUND = 20;
-const DRAW_PREVIEW_CANDLES = 5;
+const DRAW_CANDLES_PER_ROUND = 40;
 const DRAW_CANDLE_INTERVAL_MS = 1000;
-const DRAW_DRAWING_TIME_SEC = 10;
-const DRAW_PREVIEW_TIME_SEC = 2;
-const DRAW_MAX_ROUNDS = 12;
+const DRAW_DRAWING_TIME_SEC = 15;
+const DRAW_MAX_ROUNDS = 8;
 const DRAW_MM_LIQUIDATION_PERCENT = 50; // MM gets 50% of liquidated margin
-const DRAW_BASE_VOLATILITY = 0.002; // 0.2% of price
-const DRAW_SLOPE_FACTOR = 1.5;
+const DRAW_BASE_VOLATILITY = 0.0003; // 0.03% of price — tiny wicks
+const DRAW_SLOPE_FACTOR = 0.03;
 ```
 
 ## Not Included

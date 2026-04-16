@@ -3,10 +3,9 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useDrawGame } from '@/lib/useDrawGame';
-import type { DrawPoint } from '@/lib/useDrawGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
-import type { Leverage, Candle } from '@/lib/types';
+import type { Leverage, Candle, DrawPoint } from '@/lib/types';
 
 import { formatPrice } from '@/lib/utils';
 import { RANDOM_NICKS } from '@/lib/constants';
@@ -31,9 +30,9 @@ function PlayDrawContent() {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, liquidationAlert, skillAlert,
     bonusResult, bonusData, finalStats,
-    drawTimer, isDrawing, previewCandles, mmLiquidationAlert,
+    drawTimer, isDrawing, mmLiquidationAlert,
     joinRoom, openPosition, closePosition, usePlayerSkill, submitDrawing,
-    spinSlots, spinWheel, openLootbox, playLoto, voteNextRound,
+    spinSlots, spinWheel, openLootbox, playLoto,
   } = useDrawGame();
 
   const [joined, setJoined] = useState(false);
@@ -167,9 +166,6 @@ function PlayDrawContent() {
       </div>
     );
   }
-
-  // --- DRAW_PREVIEW PHASE ---
-  // draw_preview phase removed — go straight to countdown
 
   // --- COUNTDOWN ---
   if (gameState.phase === 'countdown') {

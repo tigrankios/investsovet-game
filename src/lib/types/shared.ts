@@ -146,7 +146,6 @@ export type GamePhase =
   | 'binary_waiting'   // binary: свечи раскрываются
   | 'binary_result'    // binary: результат раунда
   | 'draw_drawing'     // draw: ММ рисует график
-  | 'draw_preview'     // draw: превью первых свечей
   | 'finished';        // итоги
 
 export interface VoteState {
@@ -273,11 +272,6 @@ export interface ClientGameState {
   binaryUpPool: number;
   binaryDownPool: number;
   binaryRevealedCount: number;
-  // Draw mode
-  drawRoundNumber: number | null;
-  drawMaxRounds: number | null;
-  drawMmEarnings: number;
-  drawLiquidationCount: number;
 }
 
 export interface ClientPlayerState {
@@ -327,7 +321,6 @@ export interface ServerToClientEvents {
   binaryRoundCancelled: (data: { message: string }) => void;
   // Draw mode
   drawPhase: (data: { timer: number }) => void;
-  drawPreview: (data: { candles: Candle[] }) => void;
   mmLiquidationBonus: (data: { nickname: string; amount: number }) => void;
   playerEliminated: (data: { playerId: string }) => void;
   betTimer: (seconds: number) => void;
