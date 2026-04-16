@@ -7,14 +7,8 @@ import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { BONUS_TITLES, MAX_POSITION_PERCENT } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
+import { RANDOM_NICKS } from '@/lib/constants';
 import { IconLong, IconShort, IconTrophy, IconSilver, IconBronze, IconCrown, IconFinish, BONUS_ICON_MAP } from '@/components/icons';
-
-const RANDOM_NICKS = [
-  'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
-  'ShortСлив', 'МаржинКолл', 'BullishПацан', 'DumpМастер',
-  'ToTheMoon', 'РугПуллер', 'Х100Мечтатель', 'ДноПробито',
-  'WenLambo', 'ХоДлЕр', 'Liquidated', 'МедвежийКапкан',
-];
 
 export default function PlayMMPage() {
   return (

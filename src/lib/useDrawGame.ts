@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useGame, getSocket } from './useGame';
-import { SKILL_NAMES, SKILL_EMOJIS } from './types';
-import type { SkillType, Candle } from './types';
+import type { Candle } from './types';
 
 export interface DrawPoint {
   x: number; // 0-1, normalized X position
@@ -13,9 +12,6 @@ export interface DrawPoint {
 export function useDrawGame() {
   const game = useGame();
 
-  // Classic skill alerts (reused from useClassicGame)
-  const [skillAlert, setSkillAlert] = useState('');
-
   // Draw-specific state
   const [drawTimer, setDrawTimer] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -24,17 +20,6 @@ export function useDrawGame() {
 
   useEffect(() => {
     const socket = getSocket();
-
-    socket.on('skillAssigned', () => {
-      // playerUpdate will carry the skill info
-    });
-
-    socket.on('skillUsed', ({ nickname, skill }: { nickname: string; skill: SkillType }) => {
-      const emoji = SKILL_EMOJIS[skill as SkillType] || '';
-      const name = SKILL_NAMES[skill as SkillType] || skill;
-      setSkillAlert(`${nickname}: ${emoji} ${name.toUpperCase()}!`);
-      setTimeout(() => setSkillAlert(''), 3000);
-    });
 
     socket.on('drawPhase', ({ timer }: { timer: number }) => {
       setDrawTimer(timer);
@@ -52,8 +37,6 @@ export function useDrawGame() {
     });
 
     return () => {
-      socket.off('skillAssigned');
-      socket.off('skillUsed');
       socket.off('drawPhase');
       socket.off('drawPreview');
       socket.off('mmLiquidationBonus');
@@ -82,7 +65,6 @@ export function useDrawGame() {
 
   return {
     ...game,
-    skillAlert,
     drawTimer,
     isDrawing,
     previewCandles,

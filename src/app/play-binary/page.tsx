@@ -5,15 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { useBinaryGame } from '@/lib/useBinaryGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { formatPrice } from '@/lib/utils';
+import { RANDOM_NICKS } from '@/lib/constants';
 import type { Candle } from '@/lib/types';
 import { IconTrophy, IconSilver, IconBronze, IconFinish } from '@/components/icons';
-
-const RANDOM_NICKS = [
-  'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
-  'ShortСлив', 'МаржинКолл', 'BullishПацан', 'DumpМастер',
-  'ToTheMoon', 'РугПуллер', 'Х100Мечтатель', 'ДноПробито',
-  'WenLambo', 'ХоДлЕр', 'Liquidated', 'МедвежийКапкан',
-];
 
 const BET_PERCENTS = [10, 25, 50, 75, 100] as const;
 

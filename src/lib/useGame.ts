@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { getSocket } from './socket-client';
+import { SKILL_NAMES, SKILL_EMOJIS } from './types';
 import type {
   ClientGameState, ClientPlayerState, LeaderboardEntry,
   RoundResult, Candle, Leverage, BonusResult, BonusType, FinalPlayerStats,
-  GameMode,
+  GameMode, SkillType,
 } from './types';
 
 // Re-export socket getter so mode-specific hooks can reuse it
@@ -26,6 +27,7 @@ export function useGame() {
   const [bonusData, setBonusData] = useState<{ timer: number; bonusType: BonusType; results: { nickname: string; result: BonusResult }[] } | null>(null);
   const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
   const [priceAlert, setPriceAlert] = useState('');
+  const [skillAlert, setSkillAlert] = useState('');
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -66,6 +68,17 @@ export function useGame() {
     socket.on('bonusResult', (result) => setBonusResult(result));
     socket.on('bonusUpdate', (data) => setBonusData(data));
 
+    socket.on('skillAssigned', () => {
+      // playerUpdate will carry the skill info
+    });
+
+    socket.on('skillUsed', ({ nickname, skill }: { nickname: string; skill: SkillType }) => {
+      const emoji = SKILL_EMOJIS[skill] || '';
+      const name = SKILL_NAMES[skill] || skill;
+      setSkillAlert(`${nickname}: ${emoji} ${name.toUpperCase()}!`);
+      setTimeout(() => setSkillAlert(''), 3000);
+    });
+
     socket.on('playerJoined', () => {
       // handled via gameState update
     });
@@ -93,6 +106,8 @@ export function useGame() {
       socket.off('playerJoined');
       socket.off('playerLeft');
       socket.off('error');
+      socket.off('skillAssigned');
+      socket.off('skillUsed');
     };
   }, []);
 
@@ -135,7 +150,7 @@ export function useGame() {
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, liquidationAlert,
-    bonusResult, bonusData, finalStats, priceAlert,
+    bonusResult, bonusData, finalStats, priceAlert, skillAlert,
     createRoom, joinRoom, startGame, openPosition, closePosition,
     spinSlots, spinWheel, openLootbox, playLoto,
   };

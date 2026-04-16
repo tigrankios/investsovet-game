@@ -8,18 +8,12 @@ import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
 import type { Leverage, Candle } from '@/lib/types';
 
 import { formatPrice } from '@/lib/utils';
+import { RANDOM_NICKS } from '@/lib/constants';
 import { IconLong, IconShort, IconTrophy, IconSilver, IconBronze, IconFinish, IconSkillShield, IconSkillBlind, SKILL_ICON_MAP, BONUS_ICON_MAP } from '@/components/icons';
 import { WheelGame } from '@/components/games/WheelGame';
 import { SlotsGame } from '@/components/games/SlotsGame';
 import { LootboxGame } from '@/components/games/LootboxGame';
 import { LotoGame } from '@/components/games/LotoGame';
-
-const RANDOM_NICKS = [
-  'CryptoБабушка', 'LunaHodler', 'ДиамантРуки', 'PumpKing',
-  'ShortСлив', 'МаржинКолл', 'BullishПацан', 'DumpМастер',
-  'ToTheMoon', 'РугПуллер', 'Х100Мечтатель', 'ДноПробито',
-  'WenLambo', 'ХоДлЕр', 'Liquidated', 'МедвежийКапкан',
-];
 
 export default function PlayPage() {
   return (
