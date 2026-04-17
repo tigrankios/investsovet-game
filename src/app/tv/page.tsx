@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useGame } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import { BONUS_TITLES } from '@/lib/types';
@@ -60,6 +61,7 @@ export default function TVPage() {
   if (phase === 'lobby') {
     return (
       <div className="h-screen bg-background text-white flex flex-col">
+        <Link href="/" className="absolute top-4 left-4 text-sm text-text-secondary hover:text-white transition-colors z-10">&larr; Назад</Link>
         <header className="text-center py-8">
           <h1 className="text-7xl font-display font-black tracking-tight">
             <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>

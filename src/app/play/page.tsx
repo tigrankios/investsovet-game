@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useClassicGame } from '@/lib/useClassicGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
@@ -81,6 +82,7 @@ function PlayContent() {
   if (!joined) {
     return (
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <Link href="/" className="absolute top-4 left-4 text-sm text-text-secondary hover:text-white transition-colors">&larr; Назад</Link>
         <h1 className="text-4xl font-display font-black mb-2">
           <span className="font-display text-accent-green" style={{ textShadow: '0 0 30px rgba(0,230,118,0.4)' }}>INVEST</span>
           <span className="font-display text-accent-gold" style={{ textShadow: '0 0 30px rgba(255,215,64,0.4)' }}>SOVET</span>
