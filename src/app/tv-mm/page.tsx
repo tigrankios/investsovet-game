@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
+import { useGame, getSocket } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import { BONUS_TITLES } from '@/lib/types';
 import type { Candle, LeaderboardEntry } from '@/lib/types';
@@ -15,9 +15,40 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVMMPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    liquidationAlert, bonusData, finalStats, mmResult, mmLeverAlert, roomClosed,
+    liquidationAlert, bonusData, finalStats, roomClosed,
     createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
-  } = useMarketMakerGame();
+  } = useGame();
+
+  // MM-specific state (previously from useMarketMakerGame)
+  const [mmResult, setMmResult] = useState<{ mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string } | null>(null);
+  const [mmLeverAlert, setMmLeverAlert] = useState('');
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    socket.on('mmLeverUsed', ({ lever, duration }: { lever: string; duration: number }) => {
+      const names: Record<string, string> = {
+        commission: 'КОМИССИЯ x3',
+        freeze: 'ЗАМОРОЗКА',
+        squeeze: 'СЖАТИЕ',
+      };
+      setMmLeverAlert(`${names[lever] || lever} (${duration}s)`);
+      setTimeout(() => setMmLeverAlert(''), duration * 1000);
+    });
+
+    socket.on('mmInactivityPenalty', () => {
+      setMmLeverAlert('ММ БЕЗДЕЙСТВУЕТ! +$200 бонус!');
+      setTimeout(() => setMmLeverAlert(''), 3000);
+    });
+
+    socket.on('marketMakerResult', (data: { mmWon: boolean; mmBalance: number; tradersAvg: number; mmNickname: string }) => setMmResult(data));
+
+    return () => {
+      socket.off('mmLeverUsed');
+      socket.off('mmInactivityPenalty');
+      socket.off('marketMakerResult');
+    };
+  }, []);
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -73,7 +104,7 @@ export default function TVMMPage() {
 
   const { phase, roomCode, ticker, playerNames } = gameState;
   const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/play-mm?room=${roomCode}`
+    ? `${window.location.origin}/play?room=${roomCode}`
     : '';
 
   // --- LOBBY ---

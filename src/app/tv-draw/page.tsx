@@ -117,7 +117,7 @@ export default function TVDrawPage() {
 
   const { phase, roomCode, ticker, playerNames } = gameState;
   const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/play-draw?room=${roomCode}`
+    ? `${window.location.origin}/play?room=${roomCode}`
     : '';
   const mmNickname = gameState.marketMakerNickname;
 

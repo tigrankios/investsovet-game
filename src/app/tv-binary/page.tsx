@@ -173,7 +173,7 @@ export default function TVBinaryPage() {
 
   const { phase, roomCode, playerNames } = gameState;
   const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/play-binary?room=${roomCode}`
+    ? `${window.location.origin}/play?room=${roomCode}`
     : '';
 
   const totalPlayers = binaryLeaderboard.length || playerNames.length;
