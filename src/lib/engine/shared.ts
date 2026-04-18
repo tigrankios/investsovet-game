@@ -57,6 +57,23 @@ export function validateBonusAction(
 
 // --- Core game functions ---
 
+/** Load fresh candles for a game that was reset to lobby (classic/MM modes) */
+export async function prepareGameCandles(game: GameState): Promise<void> {
+  const ticker = getRandomTicker();
+  const duration = MIN_ROUND_DURATION + Math.floor(Math.random() * (MAX_ROUND_DURATION - MIN_ROUND_DURATION + 1));
+  const candles = await fetchHistoricalCandles(ticker, duration + 20);
+
+  game.ticker = TICKER_LABELS[ticker] || ticker;
+  game.candles = candles;
+  game.visibleCandleCount = 0;
+  game.currentPrice = candles[0]?.open || 0;
+  game.roundDuration = duration;
+  game.elapsed = 0;
+  game.roundNumber = 1;
+
+  console.log(`[Game] Loaded ${candles.length} candles for ${ticker} (restart)`);
+}
+
 export async function createGame(gameMode: GameMode = 'classic'): Promise<GameState> {
   const ticker = getRandomTicker();
   const duration = MIN_ROUND_DURATION + Math.floor(Math.random() * (MAX_ROUND_DURATION - MIN_ROUND_DURATION + 1));

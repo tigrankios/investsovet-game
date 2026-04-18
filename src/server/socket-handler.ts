@@ -118,7 +118,7 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
 
     // --- Start game (delegates to mode-specific handler) ---
 
-    socket.on('startGame', () => {
+    socket.on('startGame', async () => {
       const ctx = isHost();
       if (!ctx) return;
       const { game, roomCode } = ctx;
@@ -128,6 +128,21 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         return;
       }
       cancelLobbyInactivityTimer(roomCode);
+
+      // Load fresh candles for modes that need them (classic, market_maker)
+      // Binary and draw load their own candles per round
+      if (game.gameMode === 'classic' || game.gameMode === 'market_maker') {
+        try {
+          const { prepareGameCandles } = await import('../lib/engine/shared');
+          await prepareGameCandles(game);
+        } catch (err) {
+          console.error('[Game] Failed to load candles:', err);
+          socket.emit('error', 'Не удалось загрузить данные графика');
+          startLobbyInactivityTimer(roomCode, io);
+          return;
+        }
+      }
+
       console.log(`[WS] Game starting in ${roomCode} (mode: ${game.gameMode})`);
       if (game.gameMode === 'binary') {
         binaryStartRound(roomCode, io);
