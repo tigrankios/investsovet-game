@@ -19,39 +19,11 @@ export default function Home() {
         <p className="text-text-secondary text-xl mb-12">Командная игра для пацанов</p>
 
         <div className="flex flex-col gap-4 max-w-sm mx-auto">
-          <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-1">Режим: Классика</p>
           <button
             onClick={() => router.push('/tv')}
             className="bg-gradient-to-r from-accent-gold to-amber-500 text-background font-display font-bold text-xl py-5 rounded-2xl glow-gold hover:scale-105 transition-all active:scale-95"
           >
-            <span className="flex items-center justify-center gap-2"><IconTV size={24} color="#0B0E17" /> Классика — на ТВ</span>
-          </button>
-
-          <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-1 mt-4">Режим: Маркет-Мейкер</p>
-          <button
-            onClick={() => router.push('/tv-mm')}
-            className="bg-gradient-to-r from-accent-purple to-purple-500 text-white font-display font-bold text-xl py-5 rounded-2xl hover:scale-105 transition-all active:scale-95"
-            style={{ boxShadow: '0 0 30px rgba(139,92,246,0.3)' }}
-          >
-            <span className="flex items-center justify-center gap-2"><IconTV size={24} /> Маркет-Мейкер — на ТВ</span>
-          </button>
-
-          <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-1 mt-4">Режим: Бинарные Опционы</p>
-          <button
-            onClick={() => router.push('/tv-binary')}
-            className="bg-gradient-to-r from-accent-gold to-orange-500 text-background font-display font-bold text-xl py-5 rounded-2xl hover:scale-105 transition-all active:scale-95"
-            style={{ boxShadow: '0 0 30px rgba(255,152,0,0.3)' }}
-          >
-            <span className="flex items-center justify-center gap-2"><IconTV size={24} color="#0B0E17" /> Бинарные Опционы — на ТВ</span>
-          </button>
-
-          <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-1 mt-4">Режим: Нарисуй график</p>
-          <button
-            onClick={() => router.push('/tv-draw')}
-            className="bg-gradient-to-r from-accent-purple to-violet-500 text-white font-display font-bold text-xl py-5 rounded-2xl hover:scale-105 transition-all active:scale-95"
-            style={{ boxShadow: '0 0 30px rgba(179,136,255,0.3)' }}
-          >
-            <span className="flex items-center justify-center gap-2"><IconTV size={24} /> Нарисуй график — на ТВ</span>
+            <span className="flex items-center justify-center gap-2"><IconTV size={24} color="#0B0E17" /> Создать комнату (ТВ)</span>
           </button>
 
           <div className="border-t border-border mt-4 pt-4">
