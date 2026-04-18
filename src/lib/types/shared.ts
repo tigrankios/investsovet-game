@@ -202,6 +202,8 @@ export interface GameState {
   binaryState: BinaryRoundStateServer | null;
   // Draw mode
   drawState: DrawRoundState | null;
+  // Persistent lobby
+  hostId: string | null;
 }
 
 // --- Leaderboard entry (для ТВ) ---
@@ -325,6 +327,8 @@ export interface ServerToClientEvents {
   playerEliminated: (data: { playerId: string }) => void;
   betTimer: (seconds: number) => void;
   error: (message: string) => void;
+  // Persistent lobby
+  roomClosed: (data: { message: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -345,6 +349,10 @@ export interface ClientToServerEvents {
   placeBet: (data: { direction: BinaryDirection; percent: number }) => void;
   // Draw mode
   submitDrawing: (data: { points: DrawPoint[] }) => void;
+  // Persistent lobby
+  selectGameMode: (data: { gameMode: GameMode }) => void;
+  returnToLobby: () => void;
+  closeRoom: () => void;
 }
 
 // --- Bonus display ---

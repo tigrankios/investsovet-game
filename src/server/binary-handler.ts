@@ -18,7 +18,7 @@ import { fetchHistoricalCandles, getRandomTicker, TICKER_LABELS } from '../lib/c
 import {
   rooms, playerRooms, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, scheduleRoomCleanup,
+  clearTimer,
 } from './shared-state';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -37,7 +37,6 @@ export async function binaryStartRound(roomCode: string, io: SocketServer): Prom
     console.error(`[Binary] Not enough candles for ${rawTicker}, got ${candles.length}`);
     game.phase = 'finished';
     broadcastState(io, game);
-    scheduleRoomCleanup(roomCode, game);
     return;
   }
 
@@ -251,7 +250,6 @@ function onAllCandlesRevealed(roomCode: string, io: SocketServer): void {
     game.phase = 'finished';
     broadcastState(io, game);
     io.to(roomCode).emit('gameFinished', getBinaryFinalStats(game));
-    scheduleRoomCleanup(roomCode, game);
     console.log(`[Binary] Game finished in ${roomCode} after round ${binary.roundNumber}`);
     return;
   }

@@ -9,7 +9,7 @@ import { classicTickCandle } from '../lib/engine/classic';
 import {
   timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, shouldEndGame, scheduleRoomCleanup,
+  clearTimer, shouldEndGame,
 } from './shared-state';
 
 // ---- Classic-mode trading loop ----
@@ -155,7 +155,6 @@ function classicStartBonusPhase(io: SocketServer, game: GameState) {
             broadcastState(io, game);
             broadcastLeaderboard(io, game);
             io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-            scheduleRoomCleanup(game.roomCode, game);
           } else {
             await setupNextRound(game);
             broadcastState(io, game);
@@ -165,7 +164,7 @@ function classicStartBonusPhase(io: SocketServer, game: GameState) {
           console.error('[Game] Failed to setup next round:', err);
           game.phase = 'finished';
           broadcastState(io, game);
-          scheduleRoomCleanup(game.roomCode, game);
+          (game.roomCode, game);
         }
       }, 2000);
     }

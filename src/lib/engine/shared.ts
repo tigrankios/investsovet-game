@@ -85,6 +85,7 @@ export async function createGame(gameMode: GameMode = 'classic'): Promise<GameSt
     mmNextCandleModifier: 0,
     binaryState: null,
     drawState: null,
+    hostId: null,
   };
 }
 
@@ -645,4 +646,42 @@ export function resetPlayerSkillEffects(player: Player): void {
   player.frozenBy = null;
   player.freezeTicksLeft = 0;
   player.blindTicksLeft = 0;
+}
+
+// --- Persistent Lobby ---
+
+export function resetToLobby(game: GameState): void {
+  game.phase = 'lobby';
+  game.roundNumber = 0;
+  game.candles = [];
+  game.visibleCandleCount = 0;
+  game.currentPrice = 0;
+  game.elapsed = 0;
+  game.voteState = null;
+  game.bonusState = null;
+  game.lastAggressorId = null;
+  game.marketMakerId = null;
+  game.mmCasino = null;
+  game.mmNextCandleModifier = 0;
+  game.binaryState = null;
+  game.drawState = null;
+
+  for (const player of game.players) {
+    player.balance = INITIAL_BALANCE;
+    player.position = null;
+    player.pnl = 0;
+    player.role = 'trader';
+    player.skill = null;
+    player.skillUsed = false;
+    player.pnlMultiplier = 1;
+    player.shieldActive = false;
+    player.frozenBy = null;
+    player.freezeTicksLeft = 0;
+    player.blindTicksLeft = 0;
+    player.maxBalance = INITIAL_BALANCE;
+    player.worstTrade = 0;
+    player.bestTrade = 0;
+    player.totalTrades = 0;
+    player.liquidations = 0;
+  }
 }

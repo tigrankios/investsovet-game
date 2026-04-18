@@ -28,6 +28,7 @@ export function useGame() {
   const [finalStats, setFinalStats] = useState<FinalPlayerStats[]>([]);
   const [priceAlert, setPriceAlert] = useState('');
   const [skillAlert, setSkillAlert] = useState('');
+  const [roomClosed, setRoomClosed] = useState<string | null>(null);
   const candlesRef = useRef<Candle[]>([]);
 
   useEffect(() => {
@@ -91,6 +92,10 @@ export function useGame() {
       setTimeout(() => setError(''), 3000);
     });
 
+    socket.on('roomClosed', ({ message }: { message: string }) => {
+      setRoomClosed(message);
+    });
+
     return () => {
       socket.off('gameState');
       socket.off('playerUpdate');
@@ -108,6 +113,7 @@ export function useGame() {
       socket.off('error');
       socket.off('skillAssigned');
       socket.off('skillUsed');
+      socket.off('roomClosed');
     };
   }, []);
 
@@ -147,11 +153,25 @@ export function useGame() {
     getSocket().emit('playLoto', { bet, numbers });
   }, []);
 
+  const selectGameMode = useCallback((gameMode: GameMode) => {
+    getSocket().emit('selectGameMode', { gameMode });
+  }, []);
+
+  const returnToLobby = useCallback(() => {
+    getSocket().emit('returnToLobby');
+  }, []);
+
+  const closeRoom = useCallback(() => {
+    getSocket().emit('closeRoom');
+  }, []);
+
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, liquidationAlert,
     bonusResult, bonusData, finalStats, priceAlert, skillAlert,
+    roomClosed,
     createRoom, joinRoom, startGame, openPosition, closePosition,
     spinSlots, spinWheel, openLootbox, playLoto,
+    selectGameMode, returnToLobby, closeRoom,
   };
 }

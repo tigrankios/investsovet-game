@@ -25,7 +25,7 @@ import { roundBalance, calcLiquidationPrice, isLiquidated } from '../lib/engine/
 import {
   rooms, playerRooms, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, shouldEndGame, scheduleRoomCleanup,
+  clearTimer, shouldEndGame,
 } from './shared-state';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -363,7 +363,7 @@ function onDrawRoundEnd(roomCode: string, io: SocketServer): void {
       game.phase = 'finished';
       broadcastState(io, game);
       io.to(game.roomCode).emit('gameFinished', getFinalStats(game));
-      scheduleRoomCleanup(game.roomCode, game);
+
     }, 3000);
     return;
   }
@@ -416,7 +416,6 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
             broadcastState(io, game);
             broadcastLeaderboard(io, game);
             io.to(roomCode).emit('gameFinished', getFinalStats(game));
-            scheduleRoomCleanup(roomCode, game);
           } else {
             drawStartRound(roomCode, io);
           }
@@ -424,7 +423,6 @@ function drawStartBonusPhase(roomCode: string, io: SocketServer): void {
           console.error('[Draw] Failed to start next round:', err);
           game.phase = 'finished';
           broadcastState(io, game);
-          scheduleRoomCleanup(roomCode, game);
         }
       }, 2000);
     }
@@ -446,7 +444,6 @@ function drawFinishGame(io: SocketServer, game: GameState): void {
   for (const player of game.players) {
     if (player.connected) sendPlayerUpdate(io, game, player.id);
   }
-  scheduleRoomCleanup(game.roomCode, game);
 }
 
 // ---- Register draw-specific socket events ----

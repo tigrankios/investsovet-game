@@ -5,7 +5,7 @@ import type {
 import { AVAILABLE_LEVERAGES } from '../lib/types';
 import {
   createGame, addPlayer, removePlayer, getPlayer,
-  getVoteResult,
+  getVoteResult, resetToLobby,
   spinSlots, spinWheel, openLootbox, playLoto, getBonusResults,
   useSkill, castVote,
 } from '../lib/engine';
@@ -14,7 +14,8 @@ import { mmOpenPosition, mmClosePosition } from '../lib/engine/market-maker';
 import {
   rooms, playerRooms, playerNicknames, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, shouldEndGame, scheduleRoomCleanup,
+  clearTimer, shouldEndGame,
+  closeRoomNow, startLobbyInactivityTimer, cancelLobbyInactivityTimer,
 } from './shared-state';
 import { classicStartTrading } from './classic-handler';
 import { mmStartTrading, registerMMEvents } from './market-maker-handler';
@@ -25,7 +26,8 @@ import { drawStartRound, registerDrawEvents } from './draw-handler';
 export {
   rooms, playerRooms, playerNicknames, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, shouldEndGame, scheduleRoomCleanup,
+  clearTimer, shouldEndGame,
+  closeRoomNow, startLobbyInactivityTimer, cancelLobbyInactivityTimer,
 } from './shared-state';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -40,11 +42,13 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
 
     socket.on('createRoom', async ({ gameMode }) => {
       const game = await createGame(gameMode);
+      game.hostId = socket.id;
       rooms.set(game.roomCode, game);
       socket.join(game.roomCode);
       playerRooms.set(socket.id, game.roomCode);
       console.log(`[WS] Room created: ${game.roomCode} (${game.ticker}, ${game.roundDuration}s, ${game.candles.length} candles)`);
       broadcastState(io, game);
+      startLobbyInactivityTimer(game.roomCode, io);
     });
 
     socket.on('joinRoom', ({ roomCode, nickname }) => {
@@ -70,6 +74,9 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
         const oldId = existing.id;
         existing.id = socket.id;
         existing.connected = true;
+        if (game.hostId === oldId) {
+          game.hostId = socket.id;
+        }
         playerRooms.delete(oldId);
         playerRooms.set(socket.id, roomCode);
         playerNicknames.set(socket.id, nickname);
@@ -95,17 +102,32 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       console.log(`[WS] ${nickname} joined ${roomCode}`);
     });
 
+    // --- Host validation helper ---
+
+    function isHost() {
+      const roomCode = playerRooms.get(socket.id);
+      if (!roomCode) return null;
+      const game = rooms.get(roomCode);
+      if (!game) return null;
+      if (game.hostId !== socket.id) {
+        socket.emit('error', 'Only the host can do this');
+        return null;
+      }
+      return { game, roomCode };
+    }
+
     // --- Start game (delegates to mode-specific handler) ---
 
     socket.on('startGame', () => {
-      const roomCode = playerRooms.get(socket.id);
-      if (!roomCode) return;
-      const game = rooms.get(roomCode);
-      if (!game || game.phase !== 'lobby') return;
+      const ctx = isHost();
+      if (!ctx) return;
+      const { game, roomCode } = ctx;
+      if (game.phase !== 'lobby') return;
       if (game.players.filter((p) => p.connected).length < 1) {
         socket.emit('error', 'Нужен хотя бы 1 игрок');
         return;
       }
+      cancelLobbyInactivityTimer(roomCode);
       console.log(`[WS] Game starting in ${roomCode} (mode: ${game.gameMode})`);
       if (game.gameMode === 'binary') {
         binaryStartRound(roomCode, io);
@@ -116,6 +138,47 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       } else {
         classicStartTrading(io, game);
       }
+    });
+
+    // --- Persistent lobby events ---
+
+    socket.on('selectGameMode', ({ gameMode }) => {
+      const ctx = isHost();
+      if (!ctx) return;
+      const { game } = ctx;
+      if (game.phase !== 'lobby') {
+        socket.emit('error', 'Can only change mode in lobby');
+        return;
+      }
+      game.gameMode = gameMode;
+      broadcastState(io, game);
+      console.log(`[WS] Mode changed to ${gameMode} in ${game.roomCode}`);
+    });
+
+    socket.on('returnToLobby', () => {
+      const ctx = isHost();
+      if (!ctx) return;
+      const { game, roomCode } = ctx;
+      if (game.phase !== 'finished') {
+        socket.emit('error', 'Game must be finished first');
+        return;
+      }
+      clearTimer(roomCode);
+      resetToLobby(game);
+      broadcastState(io, game);
+      for (const player of game.players) {
+        if (player.connected) {
+          sendPlayerUpdate(io, game, player.id);
+        }
+      }
+      startLobbyInactivityTimer(roomCode, io);
+      console.log(`[WS] Room ${roomCode} returned to lobby`);
+    });
+
+    socket.on('closeRoom', () => {
+      const ctx = isHost();
+      if (!ctx) return;
+      closeRoomNow(ctx.roomCode, io);
     });
 
     // --- Trading events (shared across modes) ---

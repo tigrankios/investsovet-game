@@ -94,14 +94,46 @@ export function clearTimer(roomCode: string) {
   }
 }
 
-export function scheduleRoomCleanup(roomCode: string, game: GameState) {
-  setTimeout(() => {
-    rooms.delete(roomCode);
-    for (const player of game.players) {
-      playerRooms.delete(player.id);
-      playerNicknames.delete(player.id);
-    }
-    clearTimer(roomCode);
-    console.log(`[WS] Room ${roomCode} cleaned up (finished game)`);
-  }, 5 * 60 * 1000);
+// --- Persistent Lobby ---
+
+export const lobbyTimers = new Map<string, NodeJS.Timeout>();
+const LOBBY_INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
+
+export function closeRoomNow(roomCode: string, io: SocketServer, message = 'Комната закрыта') {
+  const game = rooms.get(roomCode);
+  if (!game) return;
+
+  io.to(roomCode).emit('roomClosed', { message });
+  clearTimer(roomCode);
+  const lobbyTimer = lobbyTimers.get(roomCode);
+  if (lobbyTimer) {
+    clearTimeout(lobbyTimer);
+    lobbyTimers.delete(roomCode);
+  }
+  rooms.delete(roomCode);
+  for (const player of game.players) {
+    playerRooms.delete(player.id);
+    playerNicknames.delete(player.id);
+  }
+  console.log(`[WS] Room ${roomCode} closed: ${message}`);
+}
+
+export function startLobbyInactivityTimer(roomCode: string, io: SocketServer) {
+  const existing = lobbyTimers.get(roomCode);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    lobbyTimers.delete(roomCode);
+    closeRoomNow(roomCode, io, 'Комната закрыта (неактивность)');
+  }, LOBBY_INACTIVITY_MS);
+
+  lobbyTimers.set(roomCode, timer);
+}
+
+export function cancelLobbyInactivityTimer(roomCode: string) {
+  const timer = lobbyTimers.get(roomCode);
+  if (timer) {
+    clearTimeout(timer);
+    lobbyTimers.delete(roomCode);
+  }
 }

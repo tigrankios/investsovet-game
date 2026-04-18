@@ -14,7 +14,7 @@ import { assignMarketMaker, useMMLever, mmPush, getMarketMakerResult, mmTickCand
 import {
   rooms, playerRooms, timers,
   broadcastState, broadcastLeaderboard, sendPlayerUpdate,
-  clearTimer, shouldEndGame, scheduleRoomCleanup,
+  clearTimer, shouldEndGame,
 } from './shared-state';
 
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -193,7 +193,7 @@ function mmStartBonusPhase(io: SocketServer, game: GameState) {
             if (mmResult) {
               io.to(game.roomCode).emit('marketMakerResult', mmResult);
             }
-            scheduleRoomCleanup(game.roomCode, game);
+
           } else {
             await mmSetupNextRound(game);
             broadcastState(io, game);
@@ -203,7 +203,6 @@ function mmStartBonusPhase(io: SocketServer, game: GameState) {
           console.error('[Game] Failed to setup next round:', err);
           game.phase = 'finished';
           broadcastState(io, game);
-          scheduleRoomCleanup(game.roomCode, game);
         }
       }, 2000);
     }
