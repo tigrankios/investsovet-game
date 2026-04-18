@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useBinaryGame } from '@/lib/useBinaryGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { formatPrice } from '@/lib/utils';
@@ -22,6 +22,7 @@ export default function PlayBinaryPage() {
 
 function PlayBinaryContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const roomFromUrl = searchParams.get('room') || '';
 
   const {
@@ -64,6 +65,14 @@ function PlayBinaryContent() {
       setRoomCode(roomFromUrl);
     }
   }, [error, joined, gameState, roomFromUrl]);
+
+  // Redirect on room closed
+  useEffect(() => {
+    if (roomClosed) {
+      const t = setTimeout(() => router.push('/'), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [roomClosed, router]);
 
   // Trigger result animation
   useEffect(() => {
@@ -144,6 +153,7 @@ function PlayBinaryContent() {
         <Link href="/" className="bg-accent-green text-white font-display font-bold py-3 px-6 rounded-xl">
           На главную
         </Link>
+        <p className="text-text-muted mt-4">Перенаправление на главную...</p>
       </div>
     );
   }

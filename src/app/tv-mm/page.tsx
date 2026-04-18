@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMarketMakerGame } from '@/lib/useMarketMakerGame';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,7 +18,16 @@ export default function TVMMPage() {
     liquidationAlert, bonusData, finalStats, mmResult, mmLeverAlert, roomClosed,
     createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
   } = useMarketMakerGame();
+  const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Redirect on room closed
+  useEffect(() => {
+    if (roomClosed) {
+      const t = setTimeout(() => router.push('/'), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [roomClosed, router]);
 
   // Auto-create market_maker room on mount
   useEffect(() => {
@@ -56,6 +66,7 @@ export default function TVMMPage() {
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center">
         <h2 className="text-3xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
         <p className="text-text-secondary">{roomClosed}</p>
+        <p className="text-text-muted mt-4">Перенаправление на главную...</p>
       </div>
     );
   }

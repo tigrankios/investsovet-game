@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useDrawGame } from '@/lib/useDrawGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
 import { SKILL_NAMES, SKILL_DESCRIPTIONS, BONUS_TITLES } from '@/lib/types';
@@ -26,6 +26,7 @@ export default function PlayDrawPage() {
 
 function PlayDrawContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const roomFromUrl = searchParams.get('room') || '';
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
@@ -69,6 +70,14 @@ function PlayDrawContent() {
       setRoomCode(roomFromUrl);
     }
   }, [error, joined, gameState, roomFromUrl]);
+
+  // Redirect on room closed
+  useEffect(() => {
+    if (roomClosed) {
+      const t = setTimeout(() => router.push('/'), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [roomClosed, router]);
 
   // Reset on new round
   useEffect(() => {
@@ -147,6 +156,7 @@ function PlayDrawContent() {
         <Link href="/" className="bg-accent-green text-white font-display font-bold py-3 px-6 rounded-xl">
           На главную
         </Link>
+        <p className="text-text-muted mt-4">Перенаправление на главную...</p>
       </div>
     );
   }

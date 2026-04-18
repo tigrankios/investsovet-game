@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGame, getSocket } from '@/lib/useGame';
 import { QRCodeSVG } from 'qrcode.react';
 import { BONUS_TITLES } from '@/lib/types';
@@ -16,7 +17,16 @@ export default function TVDrawPage() {
     liquidationAlert, bonusData, finalStats, roomClosed,
     createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
   } = useGame();
+  const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Redirect on room closed
+  useEffect(() => {
+    if (roomClosed) {
+      const t = setTimeout(() => router.push('/'), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [roomClosed, router]);
 
   // Draw-specific state
   const [drawTimer, setDrawTimer] = useState(0);
@@ -100,6 +110,7 @@ export default function TVDrawPage() {
       <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center">
         <h2 className="text-3xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
         <p className="text-text-secondary">{roomClosed}</p>
+        <p className="text-text-muted mt-4">Перенаправление на главную...</p>
       </div>
     );
   }
