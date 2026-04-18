@@ -26,7 +26,7 @@ function PlayBinaryContent() {
 
   const {
     gameState, playerState, leaderboard, countdown, candles, currentPrice,
-    error, finalStats,
+    error, finalStats, roomClosed,
     joinRoom,
     binaryRound, myBet, betTimer, lastResult, eliminated, revealedBets,
     cancelMessage, initialCandleCount,
@@ -131,6 +131,19 @@ function PlayBinaryContent() {
             ВОЙТИ
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // ─── ROOM CLOSED ───
+  if (roomClosed) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <h2 className="text-2xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
+        <p className="text-text-secondary mb-6">{roomClosed}</p>
+        <Link href="/" className="bg-accent-green text-white font-display font-bold py-3 px-6 rounded-xl">
+          На главную
+        </Link>
       </div>
     );
   }

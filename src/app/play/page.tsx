@@ -30,7 +30,7 @@ function PlayContent() {
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, liquidationAlert,
-    bonusResult, bonusData, skillAlert, finalStats,
+    bonusResult, bonusData, skillAlert, finalStats, roomClosed,
     joinRoom, openPosition, closePosition, usePlayerSkill, spinSlots, spinWheel, openLootbox, playLoto,
   } = useClassicGame();
 
@@ -132,6 +132,19 @@ function PlayContent() {
             ВОЙТИ
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // --- ROOM CLOSED ---
+  if (roomClosed) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <h2 className="text-2xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
+        <p className="text-text-secondary mb-6">{roomClosed}</p>
+        <Link href="/" className="bg-accent-green text-white font-display font-bold py-3 px-6 rounded-xl">
+          На главную
+        </Link>
       </div>
     );
   }

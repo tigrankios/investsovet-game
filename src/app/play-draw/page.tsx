@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDrawGame } from '@/lib/useDrawGame';
 import { useGameModeRedirect } from '@/lib/useGameModeRedirect';
@@ -29,7 +30,7 @@ function PlayDrawContent() {
   const {
     gameState, playerState, leaderboard, countdown, roundResult, candles, currentPrice,
     tradeMessage, error, liquidationAlert, skillAlert,
-    bonusResult, bonusData, finalStats,
+    bonusResult, bonusData, finalStats, roomClosed,
     drawTimer, isDrawing, mmLiquidationAlert,
     joinRoom, openPosition, closePosition, usePlayerSkill, submitDrawing,
     spinSlots, spinWheel, openLootbox, playLoto,
@@ -133,6 +134,19 @@ function PlayDrawContent() {
             ВОЙТИ
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // --- ROOM CLOSED ---
+  if (roomClosed) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-6">
+        <h2 className="text-2xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
+        <p className="text-text-secondary mb-6">{roomClosed}</p>
+        <Link href="/" className="bg-accent-green text-white font-display font-bold py-3 px-6 rounded-xl">
+          На главную
+        </Link>
       </div>
     );
   }

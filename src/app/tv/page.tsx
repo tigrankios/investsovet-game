@@ -15,8 +15,8 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    liquidationAlert, bonusData, finalStats,
-    createRoom, startGame,
+    liquidationAlert, bonusData, finalStats, roomClosed,
+    createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
   } = useGame();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -52,6 +52,15 @@ export default function TVPage() {
     );
   }
 
+  if (roomClosed) {
+    return (
+      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center">
+        <h2 className="text-3xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
+        <p className="text-text-secondary">{roomClosed}</p>
+      </div>
+    );
+  }
+
   const { phase, roomCode, ticker, playerNames } = gameState;
   const joinUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/play?room=${roomCode}`
@@ -60,8 +69,14 @@ export default function TVPage() {
   // --- LOBBY ---
   if (phase === 'lobby') {
     return (
-      <div className="h-screen bg-background text-white flex flex-col">
+      <div className="h-screen bg-background text-white flex flex-col relative">
         <Link href="/" className="absolute top-4 left-4 text-sm text-text-secondary hover:text-white transition-colors z-10">&larr; Назад</Link>
+        <button
+          onClick={closeRoom}
+          className="absolute top-4 right-4 text-sm text-text-muted hover:text-accent-red transition-colors"
+        >
+          Закрыть комнату
+        </button>
         <header className="text-center py-8">
           <h1 className="text-7xl font-display font-black tracking-tight">
             <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
@@ -92,6 +107,31 @@ export default function TVPage() {
                 ))}
               </ul>
             )}
+
+            {/* Mode selector */}
+            <div className="mt-6">
+              <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-2">Режим</p>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { mode: 'classic' as const, label: 'Классика', color: 'from-accent-gold to-amber-500' },
+                  { mode: 'market_maker' as const, label: 'Маркет-Мейкер', color: 'from-accent-purple to-purple-500' },
+                  { mode: 'binary' as const, label: 'Бинарные', color: 'from-accent-gold to-orange-500' },
+                  { mode: 'draw' as const, label: 'Нарисуй график', color: 'from-accent-purple to-violet-500' },
+                ]).map(({ mode, label, color }) => (
+                  <button
+                    key={mode}
+                    onClick={() => selectGameMode(mode)}
+                    className={`px-4 py-2 rounded-lg font-display font-bold text-sm transition-all ${
+                      gameState.gameMode === mode
+                        ? `bg-gradient-to-r ${color} text-white scale-105`
+                        : 'bg-surface border border-border text-text-secondary hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -264,6 +304,13 @@ export default function TVPage() {
             </tbody>
           </table>
         </div>
+
+        <button
+          onClick={returnToLobby}
+          className="mt-6 bg-gradient-to-r from-accent-gold to-amber-500 text-background font-display font-bold text-xl py-4 px-8 rounded-xl hover:scale-105 transition-all"
+        >
+          В ЛОББИ
+        </button>
       </div>
     );
   }
