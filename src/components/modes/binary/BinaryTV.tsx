@@ -1,16 +1,19 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useGame, getSocket } from '@/lib/useGame';
-import { QRCodeSVG } from 'qrcode.react';
-import type { Candle } from '@/lib/types';
-import type { BinaryBet, BinaryDirection, BinaryRoundState, BinaryRoundResult, BinaryPayout } from '@/lib/types/binary';
+import { useEffect, useState } from 'react';
+import type { ClientGameState, LeaderboardEntry, Candle, FinalPlayerStats } from '@/lib/types';
+import type { BinaryBet, BinaryRoundState, BinaryRoundResult } from '@/lib/types/binary';
+import { getSocket } from '@/lib/useGame';
 import { formatPrice } from '@/lib/utils';
-import { IconTrophy, IconSilver, IconBronze, IconDice } from '@/components/icons';
+import { IconTrophy, IconSilver, IconBronze } from '@/components/icons';
 
-const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3';
+export interface BinaryTVProps {
+  gameState: ClientGameState;
+  leaderboard: LeaderboardEntry[];
+  finalStats: FinalPlayerStats[];
+  countdown: number;
+  returnToLobby: () => void;
+}
 
 // --- Binary-specific event data types ---
 interface BinaryRevealData {
@@ -29,21 +32,11 @@ interface BinaryLeaderboardEntry {
   eliminated: boolean;
 }
 
-export default function TVBinaryPage() {
-  const {
-    gameState, leaderboard, finalStats, roomClosed,
-    createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
-  } = useGame();
-  const router = useRouter();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Redirect on room closed
-  useEffect(() => {
-    if (roomClosed) {
-      const t = setTimeout(() => router.push('/'), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [roomClosed, router]);
+export function BinaryTV({
+  gameState, leaderboard, finalStats, countdown,
+  returnToLobby,
+}: BinaryTVProps) {
+  const { phase, playerNames } = gameState;
 
   // Binary-specific state
   const [binaryRound, setBinaryRound] = useState<BinaryRoundState | null>(null);
@@ -56,7 +49,6 @@ export default function TVBinaryPage() {
   const [binaryLeaderboard, setBinaryLeaderboard] = useState<BinaryLeaderboardEntry[]>([]);
   const [betCount, setBetCount] = useState(0);
   const [eliminatedAlert, setEliminatedAlert] = useState('');
-  const [countdown, setCountdown] = useState(0);
   const [cancelMessage, setCancelMessage] = useState('');
 
   // Listen for binary-specific socket events
@@ -100,10 +92,6 @@ export default function TVBinaryPage() {
       setTimeout(() => setCancelMessage(''), 3000);
     });
 
-    socket.on('countdown', (sec: number) => {
-      setCountdown(sec);
-    });
-
     return () => {
       socket.off('binaryRound');
       socket.off('binaryReveal');
@@ -111,70 +99,8 @@ export default function TVBinaryPage() {
       socket.off('binaryResult');
       socket.off('playerEliminated');
       socket.off('binaryRoundCancelled');
-      socket.off('countdown');
     };
   }, []);
-
-  // Music during active phases
-  useEffect(() => {
-    if (!gameState) return;
-    const activePhasesForMusic = ['binary_betting', 'binary_reveal', 'binary_waiting'];
-    if (activePhasesForMusic.includes(gameState.phase)) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(MUSIC_URL);
-        audioRef.current.loop = true;
-        audioRef.current.volume = 0.3;
-      }
-      audioRef.current.play().catch(() => {});
-    } else {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    }
-  }, [gameState?.phase]);
-
-  // Auto-create binary room — wait for socket connection to avoid race condition
-  const roomCreatedRef = useRef(false);
-  useEffect(() => {
-    if (gameState || roomCreatedRef.current) return;
-    const socket = getSocket();
-    if (socket.connected) {
-      roomCreatedRef.current = true;
-      createRoom('binary');
-    } else {
-      const onConnect = () => {
-        if (!roomCreatedRef.current) {
-          roomCreatedRef.current = true;
-          createRoom('binary');
-        }
-      };
-      socket.on('connect', onConnect);
-      return () => { socket.off('connect', onConnect); };
-    }
-  }, [gameState, createRoom]);
-
-  if (!gameState) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <div className="text-accent-gold text-4xl font-display animate-pulse">Загрузка...</div>
-      </div>
-    );
-  }
-
-  if (roomClosed) {
-    return (
-      <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center">
-        <h2 className="text-3xl font-display font-bold text-accent-red mb-4">Комната закрыта</h2>
-        <p className="text-text-secondary">{roomClosed}</p>
-        <p className="text-text-muted mt-4">Перенаправление на главную...</p>
-      </div>
-    );
-  }
-
-  const { phase, roomCode, playerNames } = gameState;
-  const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/play-binary?room=${roomCode}`
-    : '';
 
   const totalPlayers = binaryLeaderboard.length || playerNames.length;
   const entryPrice = binaryRound?.entryPrice ?? 0;
@@ -182,93 +108,6 @@ export default function TVBinaryPage() {
   const roundNumber = binaryRound?.roundNumber ?? gameState.roundNumber ?? 0;
   const maxRounds = binaryRound?.totalRounds ?? 20;
   const totalCandles = 5;
-
-  // --- LOBBY ---
-  if (phase === 'lobby') {
-    return (
-      <div className="h-screen bg-background text-white flex flex-col relative">
-        <Link href="/" className="absolute top-4 left-4 text-sm text-text-secondary hover:text-white transition-colors z-10">&larr; Назад</Link>
-        <button
-          onClick={closeRoom}
-          className="absolute top-4 right-4 text-sm text-text-muted hover:text-accent-red transition-colors"
-        >
-          Закрыть комнату
-        </button>
-        <header className="text-center py-8">
-          <h1 className="text-7xl font-display font-black tracking-tight">
-            <span className="font-display text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
-            <span className="font-display text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
-          </h1>
-          <p className="text-accent-gold text-xl mt-2 inline-flex items-center gap-2">
-            <IconDice size={20} /> Режим: Бинарные Опционы
-          </p>
-        </header>
-
-        <div className="flex-1 flex items-center justify-center gap-16 px-8">
-          <div className="flex flex-col items-center gap-4">
-            <div className="bg-white p-4 rounded-2xl">
-              <QRCodeSVG value={joinUrl} size={220} />
-            </div>
-            <p className="text-5xl font-display font-mono font-bold text-accent-gold tracking-widest">{roomCode}</p>
-            <p className="text-text-muted text-sm">Отсканируй QR или введи код</p>
-          </div>
-
-          <div className="glass border border-border rounded-2xl p-8 min-w-80">
-            <h3 className="text-text-secondary text-lg mb-4">Игроки ({playerNames.length})</h3>
-            {playerNames.length === 0 ? (
-              <p className="text-text-muted animate-pulse">Ждём игроков...</p>
-            ) : (
-              <ul className="space-y-2">
-                {playerNames.map((name) => (
-                  <li key={name} className="text-xl text-white flex items-center gap-2">
-                    <span className="text-accent-green">●</span> {name}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Mode selector */}
-            <div className="mt-6">
-              <p className="text-text-secondary text-sm font-semibold uppercase tracking-wider mb-2">Режим</p>
-              <div className="flex gap-2 flex-wrap">
-                {([
-                  { mode: 'classic' as const, label: 'Классика', color: 'from-accent-gold to-amber-500' },
-                  { mode: 'market_maker' as const, label: 'Маркет-Мейкер', color: 'from-accent-purple to-purple-500' },
-                  { mode: 'binary' as const, label: 'Бинарные', color: 'from-accent-gold to-orange-500' },
-                  { mode: 'draw' as const, label: 'Нарисуй график', color: 'from-accent-purple to-violet-500' },
-                ]).map(({ mode, label, color }) => (
-                  <button
-                    key={mode}
-                    onClick={() => selectGameMode(mode)}
-                    className={`px-4 py-2 rounded-lg font-display font-bold text-sm transition-all ${
-                      gameState.gameMode === mode
-                        ? `bg-gradient-to-r ${color} text-white scale-105`
-                        : 'bg-surface border border-border text-text-secondary hover:text-white'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <footer className="text-center py-6">
-          {playerNames.length >= 1 ? (
-            <button
-              onClick={startGame}
-              className="bg-accent-gold text-black font-display font-bold text-2xl px-12 py-4 rounded-xl hover:bg-accent-gold/90 transition-all hover:scale-105 active:scale-95 glow-gold animate-glow-pulse"
-            >
-              СТАРТ
-            </button>
-          ) : (
-            <p className="text-text-muted text-xl">Минимум 1 игрок</p>
-          )}
-        </footer>
-      </div>
-    );
-  }
 
   // --- COUNTDOWN ---
   if (phase === 'countdown') {
@@ -285,8 +124,6 @@ export default function TVBinaryPage() {
 
   // --- BINARY BETTING ---
   if (phase === 'binary_betting') {
-    const timer = countdown;
-
     return (
       <div className="h-screen bg-background flex flex-col text-white">
         {/* Cancelled alert */}
@@ -490,7 +327,7 @@ export default function TVBinaryPage() {
     const isUp = resultData.direction === 'up';
     const glowColor = isUp ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 23, 68, 0.15)';
     const textColor = isUp ? 'text-accent-green' : 'text-accent-red';
-    const arrow = isUp ? '▲' : '▼';
+    const arrow = isUp ? '\u25B2' : '\u25BC';
     const label = isUp ? 'UP WINS' : 'DOWN WINS';
 
     return (
@@ -627,8 +464,7 @@ export default function TVBinaryPage() {
   );
 }
 
-// --- Components ---
-
+// --- Binary CandlestickChart ---
 function BinaryCandlestickChart({ candles, entryPrice }: { candles: Candle[]; entryPrice: number }) {
   if (candles.length === 0) return null;
 
@@ -643,7 +479,6 @@ function BinaryCandlestickChart({ candles, entryPrice }: { candles: Candle[]; en
 
   const allHighs = visible.map((c) => c.high);
   const allLows = visible.map((c) => c.low);
-  // Include entryPrice in range so the line is always visible
   const maxPrice = Math.max(...allHighs, entryPrice);
   const minPrice = Math.min(...allLows, entryPrice);
   const priceRange = maxPrice - minPrice || 1;
