@@ -165,6 +165,10 @@ export function useGame() {
     getSocket().emit('closeRoom');
   }, []);
 
+  const rejoinHost = useCallback((roomCode: string) => {
+    getSocket().emit('rejoinHost', { roomCode });
+  }, []);
+
   return {
     gameState, playerState, leaderboard, countdown, roundResult,
     candles, currentPrice, tradeMessage, error, liquidationAlert,
@@ -172,6 +176,6 @@ export function useGame() {
     roomClosed,
     createRoom, joinRoom, startGame, openPosition, closePosition,
     spinSlots, spinWheel, openLootbox, playLoto,
-    selectGameMode, returnToLobby, closeRoom,
+    selectGameMode, returnToLobby, closeRoom, rejoinHost,
   };
 }

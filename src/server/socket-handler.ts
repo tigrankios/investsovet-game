@@ -196,6 +196,24 @@ export function setupSocketHandlers(io: SocketServer<ClientToServerEvents, Serve
       closeRoomNow(ctx.roomCode, io);
     });
 
+    socket.on('rejoinHost', ({ roomCode }) => {
+      const game = rooms.get(roomCode);
+      if (!game) {
+        socket.emit('error', 'Комната не найдена');
+        return;
+      }
+      // Update host to this socket
+      const oldHostId = game.hostId;
+      game.hostId = socket.id;
+      if (oldHostId) {
+        playerRooms.delete(oldHostId);
+      }
+      socket.join(roomCode);
+      playerRooms.set(socket.id, roomCode);
+      broadcastState(io, game);
+      console.log(`[WS] Host rejoined room ${roomCode}`);
+    });
+
     // --- Trading events (shared across modes) ---
 
     socket.on('openPosition', ({ direction, size, leverage }) => {

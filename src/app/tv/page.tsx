@@ -15,8 +15,8 @@ const MUSIC_URL = 'https://cdn.pixabay.com/audio/2022/10/25/audio_33f9de5e3a.mp3
 export default function TVPage() {
   const {
     gameState, leaderboard, countdown, roundResult, candles, currentPrice,
-    liquidationAlert, bonusData, finalStats, roomClosed,
-    createRoom, startGame, selectGameMode, returnToLobby, closeRoom,
+    liquidationAlert, bonusData, finalStats, roomClosed, error,
+    createRoom, startGame, selectGameMode, returnToLobby, closeRoom, rejoinHost,
   } = useGame();
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -47,19 +47,61 @@ export default function TVPage() {
     }
   }, [gameState?.phase]);
 
-  // Auto-create room on mount (default to classic)
-  const roomCreatedRef = useRef(false);
+  // Try to rejoin existing room or show "create room" screen
+  const attemptedRef = useRef(false);
   useEffect(() => {
-    if (gameState || roomCreatedRef.current) return;
-    roomCreatedRef.current = true;
-    createRoom('classic');
-  }, [gameState, createRoom]);
+    if (gameState || attemptedRef.current) return;
+    attemptedRef.current = true;
+    const savedRoom = sessionStorage.getItem('investsovet_tv_room');
+    if (savedRoom) {
+      rejoinHost(savedRoom);
+    }
+  }, [gameState, rejoinHost]);
 
-  // --- LOADING ---
+  // Save room code when we get one
+  useEffect(() => {
+    if (gameState?.roomCode) {
+      sessionStorage.setItem('investsovet_tv_room', gameState.roomCode);
+    }
+  }, [gameState?.roomCode]);
+
+  // Clear saved room on close or error (stale room)
+  useEffect(() => {
+    if (roomClosed || (error && !gameState)) {
+      sessionStorage.removeItem('investsovet_tv_room');
+    }
+  }, [roomClosed, error, gameState]);
+
+  // --- NO ROOM — show create screen ---
   if (!gameState) {
+    const savedRoom = typeof window !== 'undefined' ? sessionStorage.getItem('investsovet_tv_room') : null;
+    if (savedRoom && !attemptedRef.current) {
+      // Still loading reconnect
+      return (
+        <div className="h-screen bg-background flex items-center justify-center">
+          <div className="text-accent-green text-4xl font-display animate-pulse">Подключение...</div>
+        </div>
+      );
+    }
     return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <div className="text-accent-green text-4xl font-display animate-pulse">Загрузка...</div>
+      <div className="h-screen bg-background text-white flex flex-col items-center justify-center p-6"
+        style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(0,230,118,0.08) 0%, transparent 50%), #0B0E17' }}
+      >
+        <h1 className="text-5xl font-display font-black mb-2">
+          <span className="text-accent-green" style={{ textShadow: '0 0 40px rgba(0,230,118,0.4)' }}>INVEST</span>
+          <span className="text-accent-gold" style={{ textShadow: '0 0 40px rgba(255,215,64,0.4)' }}>SOVET</span>
+        </h1>
+        <p className="text-text-secondary text-xl mb-12">Экран телевизора</p>
+        <button
+          onClick={() => createRoom('classic')}
+          className="bg-gradient-to-r from-accent-green to-emerald-500 text-background font-display font-bold text-2xl py-5 px-12 rounded-2xl hover:scale-105 transition-all active:scale-95"
+          style={{ boxShadow: '0 0 30px rgba(0,230,118,0.3)' }}
+        >
+          СОЗДАТЬ КОМНАТУ
+        </button>
+        <Link href="/" className="mt-6 text-text-muted hover:text-white transition-colors text-sm">
+          ← На главную
+        </Link>
       </div>
     );
   }

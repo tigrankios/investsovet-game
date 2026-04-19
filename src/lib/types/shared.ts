@@ -353,6 +353,7 @@ export interface ClientToServerEvents {
   selectGameMode: (data: { gameMode: GameMode }) => void;
   returnToLobby: () => void;
   closeRoom: () => void;
+  rejoinHost: (data: { roomCode: string }) => void;
 }
 
 // --- Bonus display ---
